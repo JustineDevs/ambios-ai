@@ -1,4 +1,5 @@
 import { type OperationId, operationPath } from "@ambios-ai/shared";
+import { tokenRegistry } from "./token-registry";
 
 export type ApiProblem = {
   type?: string;
@@ -40,6 +41,9 @@ export function requestOperation(
 ) {
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
+  const accessToken = tokenRegistry.getToken();
+  if (accessToken && !headers.has("Authorization"))
+    headers.set("Authorization", `Bearer ${accessToken}`);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (!headers.has("X-Request-ID")) headers.set("X-Request-ID", crypto.randomUUID());
   if (!headers.has("X-Correlation-ID")) headers.set("X-Correlation-ID", crypto.randomUUID());

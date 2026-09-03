@@ -2,23 +2,20 @@ import { createClient } from "@/lib/supabase/server";
 
 export type ServerProxyAuth = {
   accessToken: string | null;
-  isDevelopmentBypass: boolean;
 };
 
-export async function getServerProxyAuth(): Promise<ServerProxyAuth> {
-  const isDevelopmentBypass =
-    process.env.NODE_ENV !== "production" && process.env.AUTH_DISABLE === "true";
-
-  if (isDevelopmentBypass) return { accessToken: null, isDevelopmentBypass: true };
-
+export async function getServerProxyAuth(request?: Request): Promise<ServerProxyAuth> {
+  const authorization = request?.headers.get("Authorization");
+  if (authorization?.startsWith("Bearer "))
+    return { accessToken: authorization.slice("Bearer ".length).trim() || null };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { accessToken: null, isDevelopmentBypass: false };
+  if (!user) return { accessToken: null };
 
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  return { accessToken: session?.access_token ?? null, isDevelopmentBypass: false };
+  return { accessToken: session?.access_token ?? null };
 }
