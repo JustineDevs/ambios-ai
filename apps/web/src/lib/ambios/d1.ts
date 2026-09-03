@@ -22,7 +22,7 @@ export async function getD1(): Promise<D1Database> {
   throw new Error("D1 access is owned by the Hono Worker; use the typed API client.");
 }
 
-async function backendGet<T>(
+export async function backendGet<T>(
   operationId: OperationId,
   pathParams: Record<string, string> = {},
   query: Record<string, string> = {},

@@ -107,10 +107,15 @@ export async function POST(request: Request) {
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Agent runtime is unavailable.";
-    const isRuntimeFailure = /not configured|missing|api key|credential|model/i.test(message);
+    const isRuntimeFailure =
+      /not configured|not connected|missing|api key|credential|model|integration|organization/i.test(
+        message,
+      );
     return errorResponse(
       isRuntimeFailure
-        ? "Agent runtime is not available. Check workspace model configuration."
+        ? message.includes("not connected")
+          ? "OpenAI is not connected for this workspace. Connect OpenAI before starting chat."
+          : "Agent runtime is not available. Check workspace model configuration."
         : "Agent request could not be started.",
       isRuntimeFailure ? 503 : 400,
     );
