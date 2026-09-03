@@ -59,7 +59,13 @@ export async function requestOperation(
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (!headers.has("X-Request-ID")) headers.set("X-Request-ID", crypto.randomUUID());
   if (!headers.has("X-Correlation-ID")) headers.set("X-Correlation-ID", crypto.randomUUID());
-  return fetch(operationUrl(operationId, pathParams, query), {
+  const path = operationUrl(operationId, pathParams, query);
+  // Browser requests must cross the same-origin proxy so the server can turn
+  // the Supabase session cookie into the Worker bearer token. Direct Worker
+  // requests cannot authenticate with that cookie alone.
+  const requestPath =
+    typeof window !== "undefined" && !path.startsWith("/api/") ? `/api${path}` : path;
+  return fetch(requestPath, {
     credentials: "include",
     ...init,
     headers,
