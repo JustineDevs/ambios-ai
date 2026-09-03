@@ -25,12 +25,10 @@ export function CSPostHogProvider({
       api_host: "https://d22ze2hfwgrlye.cloudfront.net",
       ui_host: "https://us.posthog.com",
       person_profiles: "always",
-      session_recording: {
-        maskAllInputs: false,
-        maskInputOptions: {
-          password: true,
-        },
-      },
+      // Keep product analytics lightweight and avoid optional recorder and
+      // dead-click extensions that privacy-focused browsers commonly block.
+      autocapture: false,
+      disable_session_recording: true,
     });
 
     // Identify user from server session — no extra getSession() call needed
