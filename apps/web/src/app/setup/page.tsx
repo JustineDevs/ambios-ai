@@ -1,3 +1,4 @@
+import { serviceOriginsFromEnv } from "@ambios-ai/shared";
 import {
   AlertTriangle,
   BrainCircuit,
@@ -239,10 +240,12 @@ const REC_STYLES = {
 export default function SetupPage(): ReactElement {
   const recommendations = getRecommendations();
 
-  const apiPort = getEnv("API_PORT") || "3002";
-  const apiEndpoint = getEnv("API_ENDPOINT") || `http://localhost:${apiPort}`;
-  const webPort = getEnv("WEB_PORT") || "3001";
-  const appUrl = getEnv("AMBIOS_APP_URL") || `http://localhost:${webPort}`;
+  const origins = serviceOriginsFromEnv({
+    ...process.env,
+    NODE_ENV: process.env.VERCEL ? "production" : process.env.NODE_ENV,
+  });
+  const apiEndpoint = getEnv("API_ENDPOINT") || origins.coreApiOrigin;
+  const appUrl = getEnv("AMBIOS_APP_URL") || origins.frontendOrigin;
   const restBase = `${apiEndpoint.replace(/\/$/, "")}/api`;
 
   const postgresConfigured =

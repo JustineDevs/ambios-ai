@@ -4,6 +4,7 @@ import { ambiosWebMCPTools, registerWebMCPTools } from "../webmcp/register.ts";
 import { VENDOR_FEATURE_MAP } from "../webmcp/vendor-feature-map.ts";
 
 const expected = new Set([
+  "search_products",
   "ambios.nango.get_status",
   "ambios.nango.create_connect_session",
   "ambios.identity.get_current_user",
@@ -60,6 +61,7 @@ Object.defineProperty(globalThis, "navigator", {
 });
 const registration = await registerWebMCPTools();
 const safeNames = new Set([
+  "search_products",
   "ambios.nango.get_status",
   "ambios.identity.get_current_user",
   "ambios.list_incidents",
@@ -84,6 +86,24 @@ for (const feature of VENDOR_FEATURE_MAP)
   assert.ok(ambiosWebMCPTools.some((tool) => tool.name === feature.toolName));
 assert.deepEqual(new Set(registered.map((tool) => tool.name)), safeNames);
 assert.ok(registered.every((tool) => typeof tool.execute === "function"));
+const productSearch = ambiosWebMCPTools.find((tool) => tool.name === "search_products");
+assert.ok(productSearch);
+assert.deepEqual(await productSearch.execute({ query: "enterprise" }), {
+  ok: true,
+  data: {
+    products: [
+      {
+        id: "ambios-enterprise",
+        name: "AmbiOS Enterprise",
+        category: "plans",
+        description: "Policy-controlled operations with deployment evidence.",
+      },
+    ],
+    count: 1,
+    query: "enterprise",
+    category: null,
+  },
+});
 assert.equal(
   registered.find((tool) => tool.name === "ambios.identity.get_current_user")?.annotations
     ?.readOnlyHint,

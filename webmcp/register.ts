@@ -54,6 +54,7 @@ declare global {
 
 const jsonHeaders = { "Content-Type": "application/json" };
 const readOnlyTools = new Set([
+  "search_products",
   "ambios.nango.get_status",
   "ambios.identity.get_current_user",
   "ambios.list_incidents",
@@ -443,6 +444,7 @@ const toolOperationIds: Record<string, readonly OperationId[]> = {
   "ambios.audit.get_action_log": ["getConsole"],
   "ambios.docs.propose_doc_update": ["createDocProposal"],
   "ambios.backend.deploy_service": ["deployBackend"],
+  search_products: [],
 };
 
 toolDefinitions.push({
@@ -450,6 +452,67 @@ toolDefinitions.push({
   description: "Read connector readiness and sync status for the authenticated workspace.",
   inputSchema: { type: "object", additionalProperties: false, properties: {} },
   execute: async () => callApi("listIntegrations"),
+});
+toolDefinitions.push({
+  name: "search_products",
+  description: "Search the public AmbiOS demo product catalog by name, category, or description.",
+  inputSchema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      query: { type: "string", maxLength: 100 },
+      category: { type: "string", maxLength: 50 },
+      limit: { type: "integer", minimum: 1, maximum: 20 },
+    },
+  },
+  execute: async (input) => {
+    const catalog = [
+      {
+        id: "ambios-starter",
+        name: "AmbiOS Starter",
+        category: "plans",
+        description: "Governed workspace automation for small teams.",
+      },
+      {
+        id: "ambios-team",
+        name: "AmbiOS Team",
+        category: "plans",
+        description: "Shared approvals, audit trails, and provider connections.",
+      },
+      {
+        id: "ambios-enterprise",
+        name: "AmbiOS Enterprise",
+        category: "plans",
+        description: "Policy-controlled operations with deployment evidence.",
+      },
+      {
+        id: "secure-connector",
+        name: "Secure Connector",
+        category: "connectors",
+        description: "Credential-isolated provider access through Nango.",
+      },
+    ];
+    const query = typeof input.query === "string" ? input.query.trim().toLowerCase() : "";
+    const category = typeof input.category === "string" ? input.category.trim().toLowerCase() : "";
+    const limit =
+      typeof input.limit === "number" && Number.isInteger(input.limit)
+        ? Math.min(20, Math.max(1, input.limit))
+        : 10;
+    const products = catalog
+      .filter((product) => !category || product.category === category)
+      .filter(
+        (product) =>
+          !query ||
+          `${product.name} ${product.category} ${product.description}`
+            .toLowerCase()
+            .includes(query),
+      )
+      .slice(0, limit);
+    return {
+      ok: true,
+      data: { products, count: products.length, query: query || null, category: category || null },
+    };
+  },
 });
 toolDefinitions.push({
   name: "snyk.get_vulnerabilities",
@@ -673,7 +736,7 @@ toolDefinitions.push({
 
 const tools: WebMCPTool[] = toolDefinitions.map((tool) => {
   const operationIds = toolOperationIds[tool.name];
-  if (!operationIds?.length || operationIds.some((id) => !operations[id])) {
+  if (!operationIds || operationIds.some((id) => !operations[id])) {
     throw new Error(`WebMCP tool ${tool.name} has no canonical operation mapping.`);
   }
   return { ...tool, operationIds };
