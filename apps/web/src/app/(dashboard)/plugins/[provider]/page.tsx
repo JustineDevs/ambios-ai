@@ -80,7 +80,8 @@ export default function PluginPage({ params }: { params: Promise<{ provider: str
         .openConnectUI({
           sessionToken: payload.data.connectSessionToken,
           onEvent: (event) => {
-            if (event.type === "connect" || event.type === "ready") void load();
+            if (event.type === "connect") void verify(event.payload.connectionId);
+            if (event.type === "ready") void load();
             if (event.type === "error") setError(event.payload.errorMessage);
           },
         })
@@ -91,7 +92,7 @@ export default function PluginPage({ params }: { params: Promise<{ provider: str
       setBusy(false);
     }
   }
-  async function verify() {
+  async function verify(connectionId?: string) {
     if (!item) return;
     setBusy(true);
     setError(null);
@@ -100,7 +101,11 @@ export default function PluginPage({ params }: { params: Promise<{ provider: str
         "verifyIntegration",
         {
           method: "POST",
-          headers: { "Idempotency-Key": crypto.randomUUID() },
+          headers: {
+            ...(connectionId ? { "Content-Type": "application/json" } : {}),
+            "Idempotency-Key": crypto.randomUUID(),
+          },
+          ...(connectionId ? { body: JSON.stringify({ connectionId }) } : {}),
         },
         { providerId: item.providerId },
       );

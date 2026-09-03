@@ -142,7 +142,8 @@ export default function PluginsPage() {
         .openConnectUI({
           sessionToken: payload.data.connectSessionToken,
           onEvent: (event) => {
-            if (event.type === "connect" || event.type === "ready") void refresh();
+            if (event.type === "connect") void verify(item, event.payload.connectionId);
+            if (event.type === "ready") void refresh();
             if (event.type === "error")
               setProviderErrors((current) => ({
                 ...current,
@@ -162,7 +163,7 @@ export default function PluginsPage() {
       setBusy(null);
     }
   }
-  async function verify(item: IntegrationConnection) {
+  async function verify(item: IntegrationConnection, connectionId?: string) {
     setBusy(item.providerId);
     setError(null);
     setProviderErrors((current) => ({ ...current, [item.providerId]: "" }));
@@ -171,7 +172,11 @@ export default function PluginsPage() {
         "verifyIntegration",
         {
           method: "POST",
-          headers: { "Idempotency-Key": crypto.randomUUID() },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": crypto.randomUUID(),
+          },
+          ...(connectionId ? { body: JSON.stringify({ connectionId }) } : {}),
         },
         { providerId: item.providerId },
       );

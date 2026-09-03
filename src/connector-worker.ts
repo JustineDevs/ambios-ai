@@ -434,6 +434,8 @@ app.post(operationPath("connectNango"), async (c) => {
 app.post(operationPath("verifyIntegration"), async (c) => {
   const provider = (c.req.param("providerId") ?? "").trim().toLowerCase();
   if (!provider) return c.json({ code: "VALIDATION_ERROR", error: "providerId is required" }, 400);
+  const body = (await c.req.json().catch(() => null)) as { connectionId?: string } | null;
+  const connectionIdFromCallback = body?.connectionId?.trim();
   const organization = await c.env.DB.prepare(
     "SELECT o.id FROM organizations o JOIN memberships m ON m.organization_id = o.id WHERE m.user_id = ? LIMIT 1",
   )
@@ -442,15 +444,32 @@ app.post(operationPath("verifyIntegration"), async (c) => {
   if (!organization)
     return c.json({ code: "ORGANIZATION_REQUIRED", error: "Workspace not found." }, 403);
   const row = await c.env.DB.prepare(
-    "SELECT id, connection_id AS connectionId, metadata FROM integrations WHERE organization_id = ? AND provider = ? ORDER BY created_at DESC LIMIT 1",
+    connectionIdFromCallback
+      ? "SELECT id, connection_id AS connectionId, metadata FROM integrations WHERE organization_id = ? AND provider = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
+      : "SELECT id, connection_id AS connectionId, metadata FROM integrations WHERE organization_id = ? AND provider = ? ORDER BY created_at DESC LIMIT 1",
   )
     .bind(organization.id, provider)
     .first<{ id: string; connectionId: string | null; metadata: string }>();
-  if (!row?.connectionId)
+  if (!row || (!row.connectionId && !connectionIdFromCallback))
     return c.json(
       { code: "INTEGRATION_NOT_CONNECTED", error: "Authorize this provider before verification." },
       409,
     );
+  if (connectionIdFromCallback && row.connectionId !== connectionIdFromCallback) {
+    await c.env.DB.prepare(
+      "UPDATE integrations SET connection_id = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'pending'",
+    )
+      .bind(connectionIdFromCallback, new Date().toISOString(), row.id, organization.id)
+      .run();
+    row.connectionId = connectionIdFromCallback;
+  }
+  const effectiveConnectionId = row.connectionId;
+  if (!effectiveConnectionId) {
+    return c.json(
+      { code: "INTEGRATION_NOT_CONNECTED", error: "Authorize this provider before verification." },
+      409,
+    );
+  }
   await enforceSage(c.env.DB, {
     operationId: crypto.randomUUID(),
     operationClass: "read",
@@ -458,7 +477,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
     organizationId: organization.id,
     workspaceId: organization.id,
     capability: "provider.resources.read",
-    target: `${provider}:${row.connectionId}`,
+    target: `${provider}:${effectiveConnectionId}`,
     argumentsJson: JSON.stringify({ verification: "safe-read", provider }),
   });
   const request = nangoSafeReadRequest(provider);
@@ -476,7 +495,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
       ...(request.body ? { body: request.body } : {}),
       headers: {
         Authorization: `Bearer ${c.env.NANGO_SECRET_KEY}`,
-        "Connection-Id": row.connectionId,
+        "Connection-Id": effectiveConnectionId,
         "Provider-Config-Key": providerConfig(provider),
         Accept: "application/json",
         ...(request.body ? { "Content-Type": "application/json" } : {}),
@@ -506,7 +525,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
     return c.json({
       data: {
         providerId: provider,
-        connectionId: row.connectionId,
+        connectionId: effectiveConnectionId,
         verifiedAt: now,
         outcome: "succeeded",
       },
@@ -593,6 +612,9 @@ app.post(operationPath("nangoWebhook"), async (c) => {
     provider?: string;
     connection_id?: string;
     connectionId?: string;
+    operation?: string;
+    status?: string;
+    success?: boolean;
   };
   try {
     event = JSON.parse(raw) as typeof event;
@@ -602,10 +624,10 @@ app.post(operationPath("nangoWebhook"), async (c) => {
   const connectionId = event.connection_id ?? event.connectionId;
   const integration = connectionId
     ? await c.env.DB.prepare(
-        "SELECT organization_id FROM integrations WHERE connection_id = ? AND status IN ('connected', 'pending') LIMIT 1",
+        "SELECT id, organization_id, provider FROM integrations WHERE connection_id = ? AND status IN ('connected', 'pending') LIMIT 1",
       )
         .bind(connectionId)
-        .first<{ organization_id: string }>()
+        .first<{ id: string; organization_id: string; provider: string }>()
     : null;
   if (!integration?.organization_id || !connectionId)
     return c.json(
@@ -638,6 +660,32 @@ app.post(operationPath("nangoWebhook"), async (c) => {
       new Date().toISOString(),
     )
     .run();
+  const eventName = (event.event ?? "").toLowerCase();
+  const eventOperation = (event.operation ?? "").toLowerCase();
+  const eventStatus = (event.status ?? "").toLowerCase();
+  const isAuthSuccess =
+    ["auth", "connection_created", "connection.created"].includes(eventName) &&
+    !["failed", "failure", "error"].includes(eventStatus) &&
+    ["", "create", "created", "creation"].includes(eventOperation) &&
+    event.success !== false;
+  const isDisconnect = ["connection_deleted", "connection.deleted", "disconnect"].includes(
+    eventName,
+  );
+  if (isAuthSuccess || isDisconnect) {
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(
+      "UPDATE integrations SET status = ?, connection_health = ?, capability_status = 'unverified', last_connection_check_at = ?, last_error = NULL, updated_at = ? WHERE id = ? AND organization_id = ?",
+    )
+      .bind(
+        isDisconnect ? "disconnected" : "connected",
+        isDisconnect ? "unknown" : "healthy",
+        now,
+        now,
+        integration.id,
+        integration.organization_id,
+      )
+      .run();
+  }
   return c.json({ accepted: true }, 202);
 });
 
