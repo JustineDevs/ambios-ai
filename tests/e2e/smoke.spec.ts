@@ -233,3 +233,9 @@ test("direct connector detail routes use the real Bento modal", async ({ page })
   await page.getByRole("button", { name: "Close details" }).click();
   await expect(page.getByRole("dialog", { name: "Cloudflare details" })).toHaveCount(0);
 });
+
+test("Canvas is visible in navigation and has a workspace entry surface", async ({ page }) => {
+  await page.goto("/canvas");
+  await expect(page.getByRole("heading", { name: "Canvas" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Canvas" }).first()).toBeVisible();
+});

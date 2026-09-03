@@ -109,9 +109,16 @@ export default function IncidentsPage() {
                       : "Not recorded"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/incidents/${encodeURIComponent(incident.id)}`}>Inspect</Link>
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/incidents/${encodeURIComponent(incident.id)}`}>Inspect</Link>
+                      </Button>
+                      <Button asChild size="sm">
+                        <Link href={`/incidents/${encodeURIComponent(incident.id)}/canvas`}>
+                          Canvas
+                        </Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
