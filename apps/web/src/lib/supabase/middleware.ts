@@ -11,17 +11,9 @@ export async function updateSession(request: NextRequest) {
     operationPath("mcpRegister"),
     operationPath("mcpToken"),
   ]);
-  const developmentAuthDisabled =
-    process.env.NODE_ENV !== "production" && process.env.AUTH_DISABLE === "true";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) {
-    if (developmentAuthDisabled) {
-      // Local auth-disabled development is intentionally usable without a
-      // Supabase project. Production never enters this branch because the
-      // bypass requires NODE_ENV !== "production".
-      return NextResponse.next({ request });
-    }
     throw new Error(
       "AmbiOS requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. Copy .env.example to .env and configure Supabase.",
     );
@@ -55,7 +47,7 @@ export async function updateSession(request: NextRequest) {
   // issues with users being randomly logged out.
   const {
     data: { user },
-  } = developmentAuthDisabled ? { data: { user: null } } : await supabase.auth.getUser();
+  } = await supabase.auth.getUser();
   const isPublicCanvasShare =
     request.nextUrl.pathname.includes("/incidents/") &&
     request.nextUrl.pathname.endsWith("/canvas") &&
@@ -65,9 +57,9 @@ export async function updateSession(request: NextRequest) {
     mcpOAuthPaths.has(request.nextUrl.pathname);
 
   if (
-    !developmentAuthDisabled &&
     !user &&
-    request.nextUrl.pathname.startsWith(apiPrefix) === false &&
+    request.nextUrl.pathname !== apiPrefix &&
+    !request.nextUrl.pathname.startsWith(`${apiPrefix}/`) &&
     request.nextUrl.pathname !== mcpResourcePath &&
     request.nextUrl.pathname !== mcpAuthorizationUiPath &&
     !request.nextUrl.pathname.startsWith("/login") &&

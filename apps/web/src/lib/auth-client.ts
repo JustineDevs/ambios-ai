@@ -13,10 +13,11 @@ export function useUser() {
 
   useEffect(() => {
     // Get initial user
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      setIsLoading(false);
-    });
+    void supabase.auth
+      .getUser()
+      .then(({ data: { user } }) => setUser(user))
+      .catch(() => setUser(null))
+      .finally(() => setIsLoading(false));
 
     // Listen for auth changes
     const {
@@ -44,15 +45,22 @@ export function useAuthClient() {
     },
     signInWithOAuth: async (provider: "google") => {
       const next = `${window.location.pathname}${window.location.search}`;
-      return supabase.auth.signInWithOAuth({
+      const result = await supabase.auth.signInWithOAuth({
         provider,
         options: {
+          // Keep URL generation separate from navigation. This makes the
+          // redirect reliable in embedded browsers and lets the caller show
+          // a useful error when the provider cannot be initialized.
+          skipBrowserRedirect: true,
           redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       });
-    },
-    signInWithPassword: async (email: string, password: string) => {
-      return supabase.auth.signInWithPassword({ email, password });
+
+      if (!result.error && result.data.url) {
+        window.location.replace(result.data.url);
+      }
+
+      return result;
     },
   };
 }
