@@ -356,7 +356,12 @@ export class AgentClient {
         return;
       }
 
-      const aiMessages = this.convertToAIMessages(messages);
+      const convertedMessages = this.convertToAIMessages(messages);
+      const systemMessages = convertedMessages
+        .filter((message: any) => message.role === "system")
+        .map((message: any) => message.content)
+        .filter((content: unknown): content is string => typeof content === "string" && !!content);
+      const aiMessages = convertedMessages.filter((message: any) => message.role !== "system");
 
       const lastMsg = aiMessages.findLast((m: any) => m.role !== "system");
       if (lastMsg && lastMsg.role === "assistant") {
@@ -366,6 +371,7 @@ export class AgentClient {
       const result = streamText({
         model: this.model,
         messages: aiMessages,
+        ...(systemMessages.length > 0 ? { system: systemMessages.join("\n\n") } : {}),
         tools,
         stopWhen: stepCountIs(50),
         abortSignal: ctx.abortSignal,
