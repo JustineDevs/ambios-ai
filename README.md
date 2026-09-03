@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./public/assets/banner.png" alt="AmbiOS AI" width="800" />
-  <h1>AmbiOS AI</h1>
+  <img src="./public/assets/screenshot/Architecture-diagram.png" alt="AmbiOS AI architecture diagram" width="1200" />
   <p><strong>Human judgment and agent action, in one operational workspace.</strong></p>
   <p>Structured context, guardrails, approvals, and reviewable actions for safer AI-assisted operations.</p>
   <p><a href="#quick-start">Quick Start</a> · <a href="#mvp-workflow">MVP Workflow</a> · <a href="./CONTRIBUTING.md">Contributing</a> · <a href="./LICENSE">License</a></p>
