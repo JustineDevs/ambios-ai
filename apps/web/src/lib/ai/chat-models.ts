@@ -16,27 +16,6 @@ export type ChatModelDefinition = {
  */
 export const CHAT_MODEL_DEFINITIONS = [
   {
-    id: "gpt-5.6-luna",
-    name: "GPT-5.6 Luna",
-    provider: "openai",
-    description: "Fast, cost-efficient execution for high-volume work",
-    category: "fast",
-  },
-  {
-    id: "gpt-5.6-terra",
-    name: "GPT-5.6 Terra",
-    provider: "openai",
-    description: "Best balance of reasoning quality, speed, and cost",
-    category: "flagship",
-  },
-  {
-    id: "gpt-5.6-sol",
-    name: "GPT-5.6 Sol",
-    provider: "openai",
-    description: "Deep reasoning for complex incidents and architecture",
-    category: "flagship",
-  },
-  {
     id: "gpt-4.1",
     name: "GPT-4.1",
     provider: "openai",
@@ -55,6 +34,13 @@ export const CHAT_MODEL_DEFINITIONS = [
     name: "GPT-4o",
     provider: "openai",
     description: "Multimodal reasoning and analysis",
+    category: "legacy",
+  },
+  {
+    id: "gpt-4o-mini",
+    name: "GPT-4o mini",
+    provider: "openai",
+    description: "Fast, economical responses for routine tasks",
     category: "legacy",
   },
   {

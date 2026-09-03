@@ -27,28 +27,28 @@ interface DropdownDisclosureProps {
 
 const DEFAULT_MODELS: Model[] = [
   {
-    id: "sonnet",
-    name: "Sonnet 3.5",
-    description: "Advanced reasoning",
+    id: "gpt-4.1",
+    name: "GPT-4.1",
+    description: "Reliable general-purpose operations assistant",
     icon: <SiClaude size={22} />,
     hasUpgrade: true,
   },
   {
-    id: "llama",
-    name: "Llama 3.2",
-    description: "Versatile problem-solving",
+    id: "gpt-4.1-mini",
+    name: "GPT-4.1 mini",
+    description: "Low-latency responses for everyday tasks",
     icon: <FaMeta size={22} />,
   },
   {
-    id: "qwen",
-    name: "Qwen 2.5",
-    description: "Rapid text generation",
+    id: "gpt-4o",
+    name: "GPT-4o",
+    description: "Multimodal reasoning and analysis",
     icon: <HugeiconsIcon icon={QwenFreeIcons} size={24} color="#7c7b82" strokeWidth={1.5} />,
   },
   {
-    id: "gemma",
-    name: "Gemma 2",
-    description: "Efficient task completion",
+    id: "o4-mini",
+    name: "o4-mini",
+    description: "Focused reasoning for complex decisions",
     icon: <HugeiconsIcon icon={GoogleGeminiIcon} size={24} color="#7c7b82" strokeWidth={1.5} />,
   },
 ];
