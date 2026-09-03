@@ -2,7 +2,11 @@ import { initializeAIModel } from "@ambios-ai/shared/utils/ai-model-init";
 import { backendGet } from "@/lib/ambios/d1";
 import { nangoProxyFetch } from "@/lib/nango/server";
 
-export async function initializeUserAIModel(userId: string, modelOverride?: string) {
+export async function initializeUserAIModel(
+  userId: string,
+  modelOverride?: string,
+  accessToken?: string,
+) {
   void userId;
   // backendGet already unwraps the worker's `{ data: ... }` response envelope.
   const result = await backendGet<{
@@ -18,7 +22,7 @@ export async function initializeUserAIModel(userId: string, modelOverride?: stri
         connectionStatus: string;
       }>;
     };
-  } | null>("listIntegrations");
+  } | null>("listIntegrations", {}, {}, accessToken);
   const integrations = result?.integrations ?? result?.data?.integrations ?? [];
   const integration = integrations.find(
     (item) => item.providerId === "openai" && item.connectionStatus === "connected",

@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     // Chat credentials are workspace-scoped Nango connections, not deployment
     // environment variables. This keeps the selector and Connect flow on the
     // same source of truth and prevents a false "runtime not configured" state.
-    const modelInstance = await initializeUserAIModel(userId, body.model);
+    const modelInstance = await initializeUserAIModel(userId, body.model, token);
     const client = new AgentClient({
       token,
       apiEndpoint,

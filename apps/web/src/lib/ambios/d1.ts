@@ -26,8 +26,9 @@ export async function backendGet<T>(
   operationId: OperationId,
   pathParams: Record<string, string> = {},
   query: Record<string, string> = {},
+  accessToken?: string,
 ): Promise<T> {
-  const result = await backendGetResult<T>(operationId, pathParams, query);
+  const result = await backendGetResult<T>(operationId, pathParams, query, accessToken);
   return result.data as T;
 }
 
@@ -35,6 +36,7 @@ export async function backendGetResult<T>(
   operationId: OperationId,
   pathParams: Record<string, string> = {},
   query: Record<string, string> = {},
+  accessToken?: string,
 ): Promise<{ data: T | null; error?: string }> {
   const base = serviceOriginsFromEnv(process.env).coreApiOrigin;
   const cookieHeader = (await cookies()).toString();
@@ -48,6 +50,7 @@ export async function backendGetResult<T>(
   } catch {
     // The request remains unauthenticated and the backend must reject it.
   }
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   try {
     const path = operationPath(operationId, pathParams);
     const queryString = new URLSearchParams(query).toString();
