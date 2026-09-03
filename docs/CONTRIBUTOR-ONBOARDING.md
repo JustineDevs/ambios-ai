@@ -1,86 +1,49 @@
 # Contributor onboarding
 
-This is the short path for someone making a safe, reviewable contribution.
+AmbiOS contributions should be small enough to review and complete enough to verify. Start with the owning boundary, not with a new abstraction.
 
 ## Before editing
 
-1. Read [Developer onboarding](./DEVELOPER-ONBOARDING.md).
-2. Search existing code before introducing a new utility, route, type, or dependency.
-3. Check the relevant ADR and current [OpenAPI contract](../openapi.yaml).
-4. Confirm whether the change belongs to the Next.js frontend, Core/Connector Hono Worker, shared packages, WebMCP registry, or documentation.
+1. Read [Developer onboarding](./DEVELOPER-ONBOARDING.md) and [Engineering standards](./ENGINEERING-STANDARDS.md).
+2. Search for the existing route, schema, type, client, status, and test before adding another one.
+3. Check [Feature status](./FEATURE-STATUS.md) and the relevant [ADR](./ADR/README.md).
+4. Confirm whether the change belongs to Next.js, the Core Worker, the Connector Worker, shared packages, WebMCP, infrastructure, or documentation.
 
-Keep the diff narrow. Existing uncommitted work belongs to the workspace owner; do not reset, reformat, or delete unrelated changes.
+Do not reset or reformat unrelated working-tree changes.
 
-## Change rules
+## Change requirements
 
-### Frontend
+| Area | Required with the change |
+| --- | --- |
+| UI | Real backend state, reachable loading/empty/error/retry states, keyboard and screen-reader access |
+| Core API | Validated input, server-side scope checks, structured errors, bounded output, OpenAPI alignment |
+| Connector/provider | Secret isolation, capability/resource checks, idempotency, retry behavior, independent verification |
+| Mutation | Exact approval binding, persisted lifecycle, audit event, and denial/no-write coverage |
+| WebMCP | Feature detection, canonical tool contract, safe output, truthful annotations, registration and authorization tests |
+| Schema/config | Forward migration, environment validation, deployment impact, and rollback note where applicable |
 
-- Render server-backed state, not fixture success.
-- Show loading, empty, unavailable, unsupported, error, retry, and success states where the route can reach them.
-- Use semantic buttons and links, keyboard-accessible controls, visible focus, and inline actionable errors.
-- Never place secrets, OAuth payloads, or provider responses in browser state or URLs.
-
-### Worker/API
-
-- Validate inputs at the boundary with the project’s schema conventions.
-- Enforce authentication and organization scope on the server.
-- Return structured JSON errors with truthful HTTP status codes.
-- Redact and bound outputs before persistence or WebMCP return.
-- Add audit and operation lineage for governed mutations.
-- Add or update OpenAPI at the same time as the route.
-
-### WebMCP
-
-- Feature-detect `navigator.modelContext` and avoid duplicate registration.
-- Keep tool schemas descriptive but never treat them as authorization.
-- Use same-origin credentialed calls and return safe structured errors.
-- Distinguish the root 29-tool contract registry from the current frontend’s 2 mounted tools; update both only when the capability is genuinely mounted and verified.
-
-### Configuration
-
-- Do not edit `.env.local` unless the task explicitly requires it.
-- Do not commit secrets or paste them into issues, logs, screenshots, or audit records.
-- Keep local HTTP behavior usable; enforce HTTPS at the production edge/runtime boundary.
-
-## Verification checklist
-
-Run from the repository root:
+## Verification
 
 ```sh
 pnpm check-types
 pnpm lint
 pnpm test
-AMBIOS_TEST_URL=http://localhost:3000 pnpm webmcp:browser-verify
 pnpm build
+pnpm production:gate
 git diff --check
 ```
 
-Start the local backend pair when testing API-backed behavior:
-
-```sh
-pnpm dev:core
-pnpm dev:connector
-```
-
-For route changes, also verify:
-
-```sh
-curl -i http://127.0.0.1:8787/api/health
-curl -i http://127.0.0.1:8787/api/readiness
-curl -i http://127.0.0.1:8787/api/not-yet-mounted
-```
-
-The last request must remain a structured 501 until the route is implemented. Do not “fix” a failing check by weakening the contract.
+Run focused route, browser, security, or provider tests as appropriate. Separate local results from deployed HTTPS, authenticated, and external-provider evidence. A successful build is not proof that a provider or MCP client can use the feature.
 
 ## Pull request handoff
 
-Describe the cause, the bounded fix, and evidence. Include:
+Include:
 
-- changed files and architectural seam,
-- user flow and state changes,
-- security/auth implications,
-- exact verification commands and results,
-- local-only versus external/deployed evidence,
-- known limitations.
+- the problem and bounded solution;
+- changed runtime boundaries and user-visible states;
+- auth, scope, privacy, audit, and side-effect impact;
+- commands and test results;
+- deployed or external evidence, or a precise limitation;
+- migration, release, and rollback considerations.
 
-For security vulnerabilities, follow [SECURITY.md](../SECURITY.md) instead of filing a public issue. Follow the [Code of Conduct](../CODE_OF_CONDUCT.md) in all project spaces.
+Report security issues through [SECURITY.md](../SECURITY.md), not a public issue. Follow the [Code of Conduct](../CODE_OF_CONDUCT.md).

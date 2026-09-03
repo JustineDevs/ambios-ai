@@ -1,32 +1,22 @@
 # AmbiOS AI onboarding
 
-Welcome. This page routes you to the right starting point.
+Choose the path that matches what you need to do:
 
-| You are here to… | Start here |
+| Goal | Guide |
 | --- | --- |
-| Build or debug the product | [Developer onboarding](./DEVELOPER-ONBOARDING.md) |
-| Submit a change | [Contributor onboarding](./CONTRIBUTOR-ONBOARDING.md) |
-| Evaluate the project or a demo | [Judge onboarding](./JUDGE-ONBOARDING.md) |
+| Understand the product or review a release | [Judge onboarding](./JUDGE-ONBOARDING.md) |
+| Run and change the code | [Developer onboarding](./DEVELOPER-ONBOARDING.md) |
+| Submit a focused contribution | [Contributor onboarding](./CONTRIBUTOR-ONBOARDING.md) |
 
-For implementation and review rules, read [Engineering standards](./ENGINEERING-STANDARDS.md), [Governance](./GOVERNANCE.md), and the [Development process](./DEVELOPMENT-PROCESS.md). For release claims, use [Feature status](./FEATURE-STATUS.md), [Release evidence](./RELEASE-EVIDENCE.md), and [CI/CD operations](./CI-CD.md).
-
-## One architectural fact to remember
-
-AmbiOS runs locally as a Next.js frontend and two Cloudflare Worker processes; in production, the frontend is hosted on Vercel and the Workers are deployed separately:
+The project has one browser application and two backend Workers:
 
 ```text
-Browser → Vercel Next.js → Core Hono Worker → D1/KV/R2/Queue
-                              ↘ Connector Hono Worker → Nango/providers
+Browser → Next.js on Vercel → Core Hono Worker → D1 / KV / R2 / Queue
+                                      ↘ Connector Hono Worker → Nango / providers
 ```
 
-The browser UI and Workers are separate applications. A successful page load does not prove that an API operation is implemented; use the route and Worker smoke checks.
+The browser renders the product and registers WebMCP when the compatible browser API is available. The Core Worker owns identity, workspace scope, domain reads, policy, approvals, audit, and queue production. The Connector Worker owns provider calls, webhooks, retries, verification, and queue consumption. The browser and model never grant themselves authority.
 
-## Current evidence vocabulary
+Use the vocabulary in [Feature status](./FEATURE-STATUS.md) when describing what exists. A page loading or a local test passing is not deployment, provider, or authenticated WebMCP evidence. Current proof is recorded in [Release evidence](./RELEASE-EVIDENCE.md) and [WebMCP verification](../webmcp/VERIFICATION.md).
 
-- **Implemented** — code exists and a local check exercises it.
-- **Unverified** — code or metadata exists, but the required runtime/provider evidence is missing.
-- **Not configured** — a required binding, secret, or external account is absent.
-- **Unsupported** — the current Worker returns a structured 501; do not present it as live.
-- **External evidence required** — deployment, OAuth consent, or a compatible HTTPS WebMCP runtime is needed.
-
-Read [Architecture](../ARCHITECTURE.md) and the [current API contract](../openapi.yaml) before changing runtime boundaries.
+Before changing a runtime boundary, data model, auth rule, provider scope, WebMCP contract, or deployment path, read [Architecture](../ARCHITECTURE.md), the applicable [ADR](./ADR/README.md), and [Engineering standards](./ENGINEERING-STANDARDS.md).

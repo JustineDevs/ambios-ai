@@ -1,35 +1,33 @@
 # Development process
 
 ```text
-Issue → scope and status → design/threat review → ADR if needed
-     → implementation → focused tests → contract/UI updates
-     → full checks → evidence review → pull request → merge
-     → deploy → post-deploy smoke → status update
+Issue → scope and status → design/security review → ADR when required
+      → implementation → focused tests → contract/UI/docs update
+      → full checks → review → merge → deploy → smoke test → evidence update
 ```
 
 ## Before coding
 
-Define the user outcome, owning boundary, data changes, auth/scope, failure states, audit requirements, and acceptance evidence. Search for existing utilities and check [FEATURE-STATUS.md](./FEATURE-STATUS.md).
+State the user outcome, owning runtime, contract and data changes, authorization scope, failure states, audit requirements, and acceptance evidence. Search for existing routes, schemas, clients, types, and utilities. Check [Feature status](./FEATURE-STATUS.md) and the relevant [ADR](./ADR/README.md).
 
-## During coding
+## During implementation
 
-Keep changes narrow. Update implementation, OpenAPI, UI state, WebMCP metadata, migrations, and tests in the same change when applicable. Do not silently broaden provider scopes or change `.env.local`.
+Keep the change narrow and update all affected surfaces together: implementation, schema, OpenAPI, UI states, WebMCP metadata, migrations, tests, and documentation. Do not broaden provider permissions, add a duplicate runtime, or change environment behavior silently.
 
 ## Before merge
 
-Run targeted checks and then:
+Run focused checks, then the repository gate:
 
 ```sh
 pnpm check-types
 pnpm lint
 pnpm test
-pnpm webmcp:browser-verify
 pnpm build
 pnpm production:gate
 ```
 
-Attach exact outputs and distinguish local proof from external proof.
+Attach command results and identify which claims are local-only, deployed, authenticated, provider-backed, or compatible-browser evidence.
 
-## Release flow
+## Release
 
-Run Cloudflare preflight, deploy the static UI and Worker through their supported scripts, apply migrations, smoke health/readiness/API routes, verify the deployed UI, and record deployment URL, commit, timestamp, migration version, and remaining blockers.
+The release owner runs Cloudflare preflight, deploys the Vercel UI and both Hono Workers through the supported scripts, applies forward-only migrations, probes health/readiness and protected boundaries, and records the commit, deployment versions, migration state, route results, bundle sizes, and remaining limitations in [Release evidence](./RELEASE-EVIDENCE.md).

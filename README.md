@@ -25,22 +25,9 @@ WebMCP is the challenge focus: AmbiOS gives a compatible browser agent a control
 
 The current release catalogs 29 tools and mounts 18 read-only tools in a compatible browser. Consequential tools remain unavailable until their provider adapter, approval path, verification evidence, and external side-effect behavior are proven. Read the [WebMCP implementation](./webmcp/AMBIOS.md) and [verification boundary](./webmcp/VERIFICATION.md) for the precise claim.
 
-## Built with
+## Built with <a href="https://nextjs.org/" title="Next.js"><img src="https://cdn.simpleicons.org/nextdotjs/ffffff" alt="Next.js" height="20" /></a> <a href="https://vercel.com/" title="Vercel"><img src="https://cdn.simpleicons.org/vercel/ffffff" alt="Vercel" height="20" /></a> <a href="https://developers.cloudflare.com/workers/" title="Cloudflare Workers"><img src="https://cdn.simpleicons.org/cloudflare/ffffff" alt="Cloudflare Workers" height="20" /></a> <a href="https://openai.com/" title="OpenAI"><img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/openai.svg" alt="OpenAI" height="20" style="filter: invert(1)" /></a> <a href="https://supabase.com/" title="Supabase Auth"><img src="https://cdn.simpleicons.org/supabase/ffffff" alt="Supabase" height="20" /></a> <a href="https://nango.dev/" title="Nango"><img src="https://nango.dev/favicon.ico" alt="Nango" height="20" style="filter: invert(1)" /></a> <a href="https://www.netlify.com/" title="Netlify provider adapter"><img src="https://cdn.simpleicons.org/netlify/ffffff" alt="Netlify" height="20" /></a> <a href="https://www.shopify.com/" title="Shopify provider adapter"><img src="https://cdn.simpleicons.org/shopify/ffffff" alt="Shopify" height="20" /></a> <a href="https://www.xendit.co/" title="Xendit integration surface"><img src="https://cdn.simpleicons.org/xendit/ffffff" alt="Xendit" height="20" /></a> <a href="https://resend.com/" title="Resend integration surface"><img src="https://cdn.simpleicons.org/resend/ffffff" alt="Resend" height="20" /></a>
 
 The production shape is intentionally split: Next.js is the user-facing application, Hono Workers own the API and governance boundary, and external services are connected only through server-side adapters. The linked architecture and status documents explain the boundaries and evidence behind these technologies.
-
-<p>
-  <a href="https://nextjs.org/" title="Next.js"><img src="https://cdn.simpleicons.org/nextdotjs" alt="Next.js" height="28" /></a>&nbsp;
-  <a href="https://vercel.com/" title="Vercel"><img src="https://cdn.simpleicons.org/vercel" alt="Vercel" height="28" /></a>&nbsp;
-  <a href="https://developers.cloudflare.com/workers/" title="Cloudflare Workers"><img src="https://cdn.simpleicons.org/cloudflare" alt="Cloudflare Workers" height="28" /></a>&nbsp;
-  <a href="https://openai.com/" title="OpenAI"><img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/openai.svg" alt="OpenAI" height="28" /></a>&nbsp;
-  <a href="https://supabase.com/" title="Supabase Auth"><img src="https://cdn.simpleicons.org/supabase" alt="Supabase" height="28" /></a>&nbsp;
-  <a href="https://nango.dev/" title="Nango"><img src="https://nango.dev/favicon.ico" alt="Nango" height="28" /></a>&nbsp;
-  <a href="https://www.netlify.com/" title="Netlify provider adapter"><img src="https://cdn.simpleicons.org/netlify" alt="Netlify" height="28" /></a>&nbsp;
-  <a href="https://www.shopify.com/" title="Shopify provider adapter"><img src="https://cdn.simpleicons.org/shopify" alt="Shopify" height="28" /></a>&nbsp;
-  <a href="https://www.xendit.co/" title="Xendit integration surface"><img src="https://cdn.simpleicons.org/xendit" alt="Xendit" height="28" /></a>&nbsp;
-  <a href="https://resend.com/" title="Resend integration surface"><img src="https://cdn.simpleicons.org/resend" alt="Resend" height="28" /></a>
-</p>
 
 | Capability | Purpose | Status |
 | --- | --- | --- |
@@ -105,50 +92,50 @@ Before deployment, populate `AMBIOS_D1_DATABASE_ID` and `AMBIOS_KV_NAMESPACE_ID`
 
 The production deployment is intentionally split: the full Next.js application is published to Vercel, while the Hono Core and Connector/Execution Workers own API, WebMCP gateway, D1/KV/R2, queues, Nango, and provider execution. Vercel rewrites same-origin `/api/*`, `/mcp`, and `/health` to the Workers. No Next.js runtime is deployed to Cloudflare.
 
-## Documentation
+<h2 align="center">Documentation</h2>
 
-<table>
+<table align="center">
   <tbody>
     <tr>
-      <td><a href="./docs/ONBOARDING.md">Onboarding</a></td>
-      <td><a href="./docs/DEVELOPER-ONBOARDING.md">Developer</a></td>
-      <td><a href="./docs/CONTRIBUTOR-ONBOARDING.md">Contributor</a></td>
+      <td align="center"><a href="./docs/ONBOARDING.md">Onboarding</a></td>
+      <td align="center"><a href="./docs/DEVELOPER-ONBOARDING.md">Developer</a></td>
+      <td align="center"><a href="./docs/CONTRIBUTOR-ONBOARDING.md">Contributor</a></td>
     </tr>
     <tr>
-      <td><a href="./docs/JUDGE-ONBOARDING.md">Judge</a></td>
-      <td><a href="./docs/CODEBASE-MAP.md">Codebase map</a></td>
-      <td><a href="./docs/FEATURE-STATUS.md">Feature status</a></td>
+      <td align="center"><a href="./docs/JUDGE-ONBOARDING.md">Judge</a></td>
+      <td align="center"><a href="./docs/CODEBASE-MAP.md">Codebase map</a></td>
+      <td align="center"><a href="./docs/FEATURE-STATUS.md">Feature status</a></td>
     </tr>
     <tr>
-      <td><a href="./docs/ENGINEERING-STANDARDS.md">Engineering standards</a></td>
-      <td><a href="./docs/GOVERNANCE.md">Governance</a></td>
-      <td><a href="./docs/DEVELOPMENT-PROCESS.md">Development process</a></td>
+      <td align="center"><a href="./docs/ENGINEERING-STANDARDS.md">Engineering standards</a></td>
+      <td align="center"><a href="./docs/GOVERNANCE.md">Governance</a></td>
+      <td align="center"><a href="./docs/DEVELOPMENT-PROCESS.md">Development process</a></td>
     </tr>
     <tr>
-      <td><a href="./docs/CI-CD.md">CI/CD</a></td>
-      <td><a href="./docs/RELEASE-EVIDENCE.md">Release evidence</a></td>
-      <td><a href="./ARCHITECTURE.md">Architecture</a></td>
+      <td align="center"><a href="./docs/CI-CD.md">CI/CD</a></td>
+      <td align="center"><a href="./docs/RELEASE-EVIDENCE.md">Release evidence</a></td>
+      <td align="center"><a href="./ARCHITECTURE.md">Architecture</a></td>
     </tr>
     <tr>
-      <td><a href="./docs/ADR/ROADMAP.md">Roadmap</a></td>
-      <td><a href="./docs/DRAFT.md">Draft</a></td>
-      <td><a href="./docs/PRD.md">PRD</a></td>
+      <td align="center"><a href="./docs/ADR/ROADMAP.md">Roadmap</a></td>
+      <td align="center"><a href="./docs/DRAFT.md">Draft</a></td>
+      <td align="center"><a href="./docs/PRD.md">PRD</a></td>
     </tr>
     <tr>
-      <td><a href="./docs/CUSTOMER.md">Customer</a></td>
-      <td><a href="./docs/PITCH.md">Pitch</a></td>
-      <td><a href="./SECURITY.md">Security policy</a></td>
+      <td align="center"><a href="./docs/CUSTOMER.md">Customer</a></td>
+      <td align="center"><a href="./docs/PITCH.md">Pitch</a></td>
+      <td align="center"><a href="./SECURITY.md">Security policy</a></td>
     </tr>
     <tr>
-      <td><a href="./CONTRIBUTING.md">Contribution guide</a></td>
-      <td><a href="./CHANGELOG.md">Change history</a></td>
-      <td><a href="./CODE_OF_CONDUCT.md">Code of Conduct</a></td>
+      <td align="center"><a href="./CONTRIBUTING.md">Contribution guide</a></td>
+      <td align="center"><a href="./CHANGELOG.md">Change history</a></td>
+      <td align="center"><a href="./CODE_OF_CONDUCT.md">Code of Conduct</a></td>
     </tr>
   </tbody>
 </table>
 
-## License
+<h2 align="center">License</h2>
 
-AmbiOS AI is released under the [MIT License](./LICENSE). Community behavior is governed by the [Code of Conduct](./CODE_OF_CONDUCT.md).
+<p align="center">AmbiOS AI is released under the <a href="./LICENSE">MIT License</a>. Community behavior is governed by the <a href="./CODE_OF_CONDUCT.md">Code of Conduct</a>.</p>
 
 <div align="center"><sub>Built for safer human-and-agent collaboration by <a href="https://github.com/JustineDevs">@Justinedevs</a>.</sub></div>

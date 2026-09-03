@@ -1,30 +1,31 @@
 # Governance
 
-## Decision rights
+AmbiOS treats authorization, provider access, durable state, and public claims as shared product responsibilities. The person who writes a change does not approve its own security or release evidence by default.
 
-| Change | Required owner/review |
+## Decision ownership
+
+| Change | Required review |
 | --- | --- |
-| Documentation-only | Contributor + maintainer review |
-| UI behavior | Frontend owner + accessibility check |
-| API/OpenAPI | API owner + security/scope review |
-| Auth, permissions, provider scopes, secrets | Security review and maintainer approval |
-| Database/schema/migration | Data owner + migration evidence |
-| Queue, approval, audit, verification | Platform/security review |
-| Deployment or production configuration | Release owner + deployment evidence |
-| New dependency or runtime | ADR and maintainer approval |
+| Documentation | Maintainer review |
+| UI or interaction | Frontend review and accessibility check |
+| API, schema, or OpenAPI | API review and scope/security review |
+| Auth, permissions, secrets, or provider scope | Security review and maintainer approval |
+| D1 migration, queue, approval, audit, or verification | Platform/security review plus tests |
+| Deployment or production configuration | Release owner and deployment evidence |
+| New dependency or runtime | ADR, security review, and maintainer approval |
 
-## Merge policy
+## Change and merge rules
 
-Every pull request must state intent, affected boundaries, user-visible behavior, security impact, tests, evidence, and known limitations. CI must pass. Missing external evidence must be labelled; it must not be hidden by changing status text or weakening tests.
+A pull request must identify the problem, owning runtime, user-visible behavior, contract/data changes, security and privacy impact, tests, evidence level, and known limitations. CI must pass before merge. Missing external evidence is recorded as a limitation; it is never disguised by changing a label.
 
-## ADR policy
+## ADRs
 
-Write an ADR before changing runtime topology, auth model, data model, provider strategy, WebMCP contract, deployment model, or a security invariant. Use the [ADR template](./ADR/templates/ADR-template.md). An ADR records context, decision, alternatives, consequences, migration, and verification.
+Write an ADR before changing runtime topology, authentication, data ownership, lifecycle states, provider strategy, WebMCP contracts, deployment, or a security invariant. Use the [ADR template](./ADR/templates/ADR-template.md). An ADR records the decision, alternatives, consequences, migration, and verification. Historical proposals must not be cited as current behavior without matching implementation and evidence.
 
-## Incident and vulnerability policy
+## Incidents and vulnerabilities
 
-Security issues follow `SECURITY.md` and are never disclosed through a public issue. Production incidents require an owner, timeline, impact, mitigation, verification, and follow-up issue. Preserve audit records and redact credentials.
+Production incidents need an owner, timeline, impact, mitigation, verification, and follow-up. Preserve relevant audit records while removing credentials and personal data from logs and reports. Report vulnerabilities privately through [SECURITY.md](../SECURITY.md), never through a public issue.
 
-## Status integrity
+## Claim integrity
 
-Only call a capability “verified” when the evidence in [RELEASE-EVIDENCE.md](./RELEASE-EVIDENCE.md) exists. Product documents, screenshots, registry entries, and page loads are not substitutes for execution proof.
+Use the status vocabulary in [Feature status](./FEATURE-STATUS.md). “Verified” requires the evidence described in [Release evidence](./RELEASE-EVIDENCE.md); code, metadata, a screenshot, or a successful page load is not enough.
