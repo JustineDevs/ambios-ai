@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const connectorProviderSchema = z.enum([
+  "openai",
   "notion",
   "cloudflare",
   "github",
@@ -15,6 +16,7 @@ export type ConnectorProvider = z.infer<typeof connectorProviderSchema>;
 export const REQUIRED_ONBOARDING_PROVIDERS = ["github"] as const;
 
 const NANGO_CONFIG_KEYS: Record<ConnectorProvider, string> = {
+  openai: "openai",
   notion: "notion",
   cloudflare: "cloudflare",
   github: "github-getting-started",

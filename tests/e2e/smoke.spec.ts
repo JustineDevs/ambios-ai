@@ -84,7 +84,7 @@ test("plugins renders the canonical provider and roadmap catalog", async ({ page
   await page.goto("/plugins");
   await expect(page.getByRole("heading", { name: "Plugins" })).toBeVisible();
   await expect(page.getByText("OpenAI", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect OpenAI" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect OpenAI API" })).toBeVisible();
   await expect(page.getByText("Connect AmbiOS to ChatGPT", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Copy app URL" })).toHaveCount(0);
   for (const removedProvider of ["Dependabot", "GitHub Security", "Apify", "Intercom"]) {

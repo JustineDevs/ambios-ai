@@ -10,7 +10,7 @@ export type ChatModelDefinition = {
  * Models exposed by the chat selector.
  *
  * Keep this list limited to models that the current chat transport can route:
- * /api/agent/chat uses the user's connected OpenAI account through Nango.
+ * /api/agent/chat uses the user's connected OpenAI API credential through Nango.
  * Provider integrations can be added here only when their server-side
  * authentication and model factory are implemented as well.
  */

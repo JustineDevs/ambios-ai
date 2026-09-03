@@ -4,7 +4,6 @@ import {
   INTEGRATION_CATALOG,
   type IntegrationConnection,
   IntegrationListSchema,
-  MCP_OPENAI_CLIENT_URL,
 } from "@ambios-ai/shared";
 import Nango from "@nangohq/frontend";
 import { ExternalLink, Loader2, Unplug } from "lucide-react";
@@ -33,8 +32,6 @@ import { requestOperation } from "@/lib/api-client";
 type Filter = "all" | "connected" | "attention" | "available" | "unsupported";
 
 function statusLabel(item: IntegrationConnection) {
-  if (item.connectionMode === "mcp_oauth")
-    return item.connectionStatus === "connected" ? "Authorized" : "Not connected";
   if (item.connectionStatus === "not_configured") return "Not configured";
   if (item.connectionStatus === "authorization_pending") return "Authorization pending";
   if (item.connectionStatus === "reauthentication_required") return "Needs re-authentication";
@@ -49,10 +46,6 @@ function statusLabel(item: IntegrationConnection) {
 }
 
 function capabilityLine(item: IntegrationConnection) {
-  if (item.connectionMode === "mcp_oauth")
-    return item.connectionStatus === "connected"
-      ? "Scoped AmbiOS MCP access for your ChatGPT account."
-      : "Start from ChatGPT to authorize scoped AmbiOS workspace tools.";
   if (item.connectionStatus === "unsupported") return "Cataloged for a future connector.";
   if (item.connectionStatus === "not_configured")
     return "Connect to inspect available workspace resources.";
@@ -119,10 +112,6 @@ export default function PluginsPage() {
       (filter === "unsupported" && item.connectionStatus === "unsupported"),
   );
   async function connect(item: IntegrationConnection) {
-    if (item.connectionMode === "mcp_oauth") {
-      window.open(MCP_OPENAI_CLIENT_URL, "_blank", "noopener,noreferrer");
-      return;
-    }
     setBusy(item.providerId);
     setError(null);
     setProviderErrors((current) => ({ ...current, [item.providerId]: "" }));
@@ -358,13 +347,12 @@ export default function PluginsPage() {
                           ? "Continue authorization"
                           : item.connectionStatus === "reauthentication_required"
                             ? "Reconnect"
-                            : item.connectionMode === "mcp_oauth"
-                              ? "Connect OpenAI"
+                            : item.providerId === "openai"
+                              ? "Connect OpenAI API"
                               : `Connect ${item.providerDisplayName}`}
                       </Button>
                     ) : null}
-                    {item.connectionMode !== "mcp_oauth" &&
-                    item.connectionStatus === "connected" ? (
+                    {item.connectionStatus === "connected" ? (
                       <Button
                         variant="ghost"
                         size="sm"

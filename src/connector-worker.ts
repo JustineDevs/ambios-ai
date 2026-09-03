@@ -19,6 +19,7 @@ type Env = {
 type ConnectorVariables = { userId: string };
 
 const providerConfig: Record<string, string> = {
+  openai: "openai",
   github: "github-getting-started",
   vercel: "vercel-mcp",
 };

@@ -1,3 +1,4 @@
+import { INTEGRATION_CATALOG } from "@ambios-ai/shared";
 import { describe, expect, it, vi } from "vitest";
 import {
   getNangoProviderConfigKey,
@@ -9,6 +10,13 @@ import { createGitHubAdapter } from "./github";
 import { createNetlifyAdapter, createShopifyAdapter, createVercelAdapter } from "./mvp-adapters";
 
 describe("Phase 0 provider integrations", () => {
+  it("keeps OpenAI API access on the Nango provider path", () => {
+    const openAi = INTEGRATION_CATALOG.find((entry) => entry.provider === "openai");
+    expect(openAi).toMatchObject({ auth: "nango_api_key" });
+    expect(getNangoProviderConfigKey("openai")).toBe("openai");
+    expect(normalizeNangoProvider("openai")).toBe("openai");
+  });
+
   it("requires the GitHub provider before onboarding is ready", () => {
     expect(getOnboardingRequirements([])).toEqual(["Connect GitHub"]);
     expect(getOnboardingRequirements(["github"])).toEqual([]);

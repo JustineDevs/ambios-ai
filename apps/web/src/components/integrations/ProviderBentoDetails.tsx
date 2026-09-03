@@ -8,14 +8,6 @@ import { Button } from "@/components/ui/button";
 import ExpandableBentoGrid from "@/components/ui/expandable-bento-grid";
 
 function statusLabel(item: IntegrationConnection) {
-  if (item.connectionMode === "mcp_oauth") {
-    if (item.connectionStatus === "connected") return "Authorized";
-    if (item.connectionStatus === "authorization_pending") return "Authorization pending";
-    if (item.connectionStatus === "reauthentication_required") return "Needs re-authentication";
-    if (item.connectionStatus === "revoked") return "Revoked";
-    if (item.connectionStatus === "error") return "Connection error";
-    return "Not connected";
-  }
   if (item.connectionStatus === "not_configured") return "Not configured";
   if (item.connectionStatus === "authorization_pending") return "Authorization pending";
   if (item.connectionStatus === "reauthentication_required") return "Needs re-authentication";
@@ -30,11 +22,6 @@ function statusLabel(item: IntegrationConnection) {
 }
 
 function capabilityLine(item: IntegrationConnection) {
-  if (item.connectionMode === "mcp_oauth") {
-    return item.connectionStatus === "connected"
-      ? "ChatGPT can access permitted AmbiOS context and create governed proposals."
-      : "Users authorize their own ChatGPT account through AmbiOS MCP OAuth.";
-  }
   if (item.connectionStatus === "unsupported")
     return "This provider is not available in the current deployment.";
   if (item.connectionStatus === "not_configured")
@@ -64,8 +51,7 @@ function DetailsContent({
     "reauthentication_required",
   ].includes(item.connectionStatus);
   const canVerify = item.connectionStatus === "connected" && !item.lastSuccessfulVerificationAt;
-  const canDisconnect =
-    item.connectionMode !== "mcp_oauth" && item.connectionStatus === "connected";
+  const canDisconnect = item.connectionStatus === "connected";
 
   return (
     <div className="w-full space-y-3 text-sm">
@@ -136,8 +122,8 @@ function DetailsContent({
           >
             {busy ? <Loader2 className="animate-spin" /> : <ExternalLink />}
             <span aria-hidden="true">
-              {item.connectionMode === "mcp_oauth"
-                ? "Connect OpenAI"
+              {item.providerId === "openai"
+                ? "Connect OpenAI API"
                 : item.connectionStatus === "reauthentication_required"
                   ? "Reconnect"
                   : item.connectionStatus === "authorization_pending"
@@ -194,10 +180,7 @@ export function ProviderBentoDetails({
         {
           id: item.providerId,
           title: `${item.providerDisplayName} details`,
-          description:
-            item.connectionMode === "mcp_oauth"
-              ? "Review the authorized ChatGPT-to-AmbiOS MCP boundary and available workspace scope."
-              : `Review ${item.providerDisplayName} connection state and supported AmbiOS operations.`,
+          description: `Review ${item.providerDisplayName} connection state and supported AmbiOS operations.`,
           icon: <ProviderLogo provider={item.providerId as never} size={24} />,
           ...(triggerIcon ? { triggerIcon } : {}),
           content: (

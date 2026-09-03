@@ -11,7 +11,12 @@ export const ConnectionStatusSchema = z.enum([
   "error",
   "unsupported",
 ]);
-export const IntegrationConnectionModeSchema = z.enum(["provider_oauth", "mcp_oauth"]);
+/** How AmbiOS obtains access for a catalog entry. ChatGPT MCP is separate. */
+export const IntegrationConnectionModeSchema = z.enum([
+  "provider_oauth",
+  "provider_api_key",
+  "mcp_oauth",
+]);
 export const ConnectionHealthSchema = z.enum([
   "unknown",
   "checking",

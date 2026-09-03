@@ -94,7 +94,7 @@ export default function OnboardingPage() {
               },
               {
                 id: 2,
-                title: "Connect your ChatGPT account through MCP OAuth",
+                title: "Connect OpenAI API access",
                 isCompleted:
                   readiness?.integrations.some(
                     (item) => item.provider === "openai" && item.status === "connected",

@@ -3,8 +3,8 @@ export const INTEGRATION_CATALOG = [
     provider: "openai",
     label: "OpenAI",
     phase: "mvp",
-    auth: "mcp_oauth",
-    description: "Use your own ChatGPT account to access scoped AmbiOS workspace tools.",
+    auth: "nango_api_key",
+    description: "Use an OpenAI API key you provide to run AmbiOS agent workflows.",
   },
   {
     provider: "notion",

@@ -70,6 +70,7 @@ async function sha256(value: string): Promise<string> {
 }
 
 const NANGO_PROVIDERS = new Set([
+  "openai",
   "notion",
   "cloudflare",
   "github",
@@ -1189,31 +1190,15 @@ export function createHonoApp() {
     const organization = await organizationFor(c);
     if (!organization) return c.json({ data: { integrations: [], nextCursor: null } });
     const rows = await c.env.DB.prepare(
-      "SELECT id, provider, status, connection_id AS connectionId, metadata, last_sync_at AS lastSyncAt, last_sync_status AS lastSyncStatus, last_error AS lastError, created_at AS createdAt, updated_at AS updatedAt FROM integrations WHERE organization_id = ? ORDER BY created_at DESC LIMIT 100",
+      "SELECT id, provider, status, connection_id AS connectionId, metadata, connection_health AS connectionHealth, capability_status AS capabilityStatus, capabilities_json AS capabilitiesJson, resource_mapping_status AS resourceMappingStatus, mapped_resource_count AS mappedResourceCount, last_connection_check_at AS lastConnectionCheckAt, last_successful_verification_at AS lastSuccessfulVerificationAt, last_sync_at AS lastSyncAt, last_sync_status AS lastSyncStatus, last_error AS lastError, created_at AS createdAt, updated_at AS updatedAt, version FROM integrations WHERE organization_id = ? ORDER BY created_at DESC LIMIT 100",
     )
       .bind(organization.id)
       .all<Record<string, unknown>>();
-    const mcpToken = await c.env.DB.prepare(
-      "SELECT expires_at AS expiresAt, revoked_at AS revokedAt, created_at AS createdAt FROM mcp_access_tokens WHERE user_id = ? AND organization_id = ? ORDER BY created_at DESC LIMIT 1",
-    )
-      .bind(c.get("userId"), organization.id)
-      .first<{ expiresAt: string; revokedAt: string | null; createdAt: string }>();
     const persisted = new Map((rows.results ?? []).map((row) => [String(row.provider), row]));
     const providers = [...INTEGRATION_PROVIDERS].map((provider) => {
       const row = persisted.get(provider);
-      const isMcpProvider = provider === "openai";
-      const isRoadmapProvider = !isMcpProvider && !NANGO_PROVIDERS.has(provider);
-      const rawStatus = isMcpProvider
-        ? mcpToken?.revokedAt
-          ? "revoked"
-          : mcpToken && Date.parse(mcpToken.expiresAt) <= Date.now()
-            ? "reauthentication_required"
-            : mcpToken
-              ? "connected"
-              : "not_configured"
-        : isRoadmapProvider
-          ? "unsupported"
-          : String(row?.status ?? "not_configured");
+      const isRoadmapProvider = !NANGO_PROVIDERS.has(provider);
+      const rawStatus = isRoadmapProvider ? "unsupported" : String(row?.status ?? "not_configured");
       const metadata =
         typeof row?.metadata === "string"
           ? (JSON.parse(row.metadata as string) as Record<string, unknown>)
@@ -1233,7 +1218,7 @@ export function createHonoApp() {
               : isRoadmapProvider
                 ? "roadmap"
                 : "productivity",
-        connectionMode: isMcpProvider ? "mcp_oauth" : "provider_oauth",
+        connectionMode: provider === "openai" ? "provider_api_key" : "provider_oauth",
         connectionStatus: [
           "not_configured",
           "authorization_started",
@@ -1247,37 +1232,49 @@ export function createHonoApp() {
         ].includes(connectionStatus)
           ? (connectionStatus as never)
           : "error",
-        connectionHealth: isMcpProvider
-          ? rawStatus === "connected"
-            ? "healthy"
-            : rawStatus === "reauthentication_required"
-              ? "degraded"
-              : "unknown"
-          : rawStatus === "connected"
-            ? "degraded"
+        connectionHealth:
+          rawStatus === "connected"
+            ? typeof row?.connectionHealth === "string"
+              ? (row.connectionHealth as never)
+              : "degraded"
             : rawStatus === "error"
               ? "failed"
               : "unknown",
         capabilityStatus:
-          isMcpProvider && rawStatus === "connected"
-            ? "read_only"
-            : rawStatus === "connected"
-              ? "unverified"
-              : "unsupported" === rawStatus
-                ? "unsupported"
-                : "unverified",
-        capabilities: PROVIDER_CAPABILITY_LINES[provider] ?? [],
-        resourceMappingStatus: "not_required",
-        mappedResourceCount: 0,
-        lastConnectionCheckAt: isMcpProvider
-          ? (mcpToken?.createdAt ?? null)
-          : typeof metadata.lastConnectionCheckAt === "string"
-            ? metadata.lastConnectionCheckAt
-            : null,
-        lastSuccessfulVerificationAt: isMcpProvider
-          ? null
-          : typeof metadata.lastSuccessfulVerificationAt === "string"
-            ? metadata.lastSuccessfulVerificationAt
+          rawStatus === "connected"
+            ? typeof row?.capabilityStatus === "string"
+              ? (row.capabilityStatus as never)
+              : "unverified"
+            : rawStatus === "unsupported"
+              ? "unsupported"
+              : "unverified",
+        capabilities:
+          typeof row?.capabilitiesJson === "string"
+            ? (() => {
+                try {
+                  const value = JSON.parse(row.capabilitiesJson);
+                  const persisted = Array.isArray(value)
+                    ? value.filter((entry): entry is string => typeof entry === "string")
+                    : [];
+                  return persisted.length > 0
+                    ? persisted
+                    : (PROVIDER_CAPABILITY_LINES[provider] ?? []);
+                } catch {
+                  return PROVIDER_CAPABILITY_LINES[provider] ?? [];
+                }
+              })()
+            : (PROVIDER_CAPABILITY_LINES[provider] ?? []),
+        resourceMappingStatus:
+          typeof row?.resourceMappingStatus === "string"
+            ? (row.resourceMappingStatus as never)
+            : "not_required",
+        mappedResourceCount:
+          typeof row?.mappedResourceCount === "number" ? Math.max(0, row.mappedResourceCount) : 0,
+        lastConnectionCheckAt:
+          typeof row?.lastConnectionCheckAt === "string" ? row.lastConnectionCheckAt : null,
+        lastSuccessfulVerificationAt:
+          typeof row?.lastSuccessfulVerificationAt === "string"
+            ? row.lastSuccessfulVerificationAt
             : null,
         lastSyncAt: typeof row?.lastSyncAt === "string" ? row.lastSyncAt : null,
         lastSyncStatus:
@@ -1291,11 +1288,8 @@ export function createHonoApp() {
         lastErrorCode: typeof metadata.lastErrorCode === "string" ? metadata.lastErrorCode : null,
         lastErrorMessageSafe:
           typeof row?.lastError === "string" ? String(row.lastError).slice(0, 240) : null,
-        nextAction: isMcpProvider
-          ? rawStatus === "connected"
-            ? "Use ChatGPT through the authorized AmbiOS MCP connection"
-            : "Connect your ChatGPT account through AmbiOS MCP OAuth"
-          : rawStatus === "pending"
+        nextAction:
+          rawStatus === "pending"
             ? "Complete provider authorization"
             : rawStatus === "connected"
               ? "Verify access with a safe read"
@@ -1303,7 +1297,7 @@ export function createHonoApp() {
         connectionCreatedAt: typeof row?.createdAt === "string" ? row.createdAt : null,
         connectionUpdatedAt: typeof row?.updatedAt === "string" ? row.updatedAt : null,
         providerMetadataVersion: String(metadata.providerMetadataVersion ?? "1"),
-        version: 1,
+        version: typeof row?.version === "number" ? row.version : 1,
       });
     });
     return c.json({ data: { integrations: providers, nextCursor: null } });

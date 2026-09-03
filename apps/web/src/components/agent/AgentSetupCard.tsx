@@ -1,6 +1,6 @@
 "use client";
 
-import { IntegrationListSchema, MCP_OPENAI_CLIENT_URL } from "@ambios-ai/shared";
+import { IntegrationListSchema } from "@ambios-ai/shared";
 import Nango from "@nangohq/frontend";
 import { Check, ExternalLink, Loader2, Plug } from "lucide-react";
 import Link from "next/link";
@@ -119,7 +119,7 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
     }
   }
 
-  async function connectProvider(provider: "github") {
+  async function connectProvider(provider: "openai" | "github") {
     setBusy(true);
     setError(null);
     try {
@@ -186,7 +186,7 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
   }
 
   const requiredProviders = [
-    { provider: "openai" as const, label: "OpenAI / ChatGPT MCP" },
+    { provider: "openai" as const, label: "OpenAI API access" },
     { provider: "github" as const, label: "GitHub" },
   ];
 
@@ -219,9 +219,9 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
             </p>
             <h2 className="mt-1 font-semibold text-xl">Prepare your workspace</h2>
             <p className="mt-2 text-muted-foreground text-sm">
-              Create an AmbiOS workspace, then connect your own ChatGPT account through remote MCP
-              OAuth. AmbiOS keeps authority over permissions, proposals, approvals, execution,
-              verification, and audit.
+              Create an AmbiOS workspace, then connect your OpenAI API key through the secure
+              provider connection flow. AmbiOS keeps authority over permissions, proposals,
+              approvals, execution, verification, and audit.
             </p>
           </div>
         </div>
@@ -265,29 +265,21 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
                     <ProviderLogo provider={provider} size={20} />
                     <span className="min-w-0 flex-1 text-sm">{label}</span>
                     {connected && <Check className="size-4 text-emerald-600" />}
-                    {provider === "openai" ? (
-                      <Button asChild className="w-full sm:ml-auto sm:w-auto" variant="outline">
-                        <a href={MCP_OPENAI_CLIENT_URL} target="_blank" rel="noreferrer">
-                          Connect OpenAI <ExternalLink className="size-4" />
-                        </a>
-                      </Button>
-                    ) : (
-                      <Button
-                        className="w-full sm:ml-auto sm:w-auto"
-                        type="button"
-                        variant={connected ? "outline" : "default"}
-                        onClick={() => void connectProvider(provider)}
-                        disabled={busy || connected}
-                      >
-                        {busy && !connected ? <Loader2 className="size-4 animate-spin" /> : null}
-                        {connected
-                          ? "Connected"
-                          : busy
-                            ? "Opening secure connection…"
-                            : `Connect ${label}`}
-                        {!connected && <ExternalLink className="size-4" />}
-                      </Button>
-                    )}
+                    <Button
+                      className="w-full sm:ml-auto sm:w-auto"
+                      type="button"
+                      variant={connected ? "outline" : "default"}
+                      onClick={() => void connectProvider(provider)}
+                      disabled={busy || connected}
+                    >
+                      {busy && !connected ? <Loader2 className="size-4 animate-spin" /> : null}
+                      {connected
+                        ? "Connected"
+                        : busy
+                          ? "Opening secure connection…"
+                          : `Connect ${label}`}
+                      {!connected && <ExternalLink className="size-4" />}
+                    </Button>
                   </div>
                 );
               })}
