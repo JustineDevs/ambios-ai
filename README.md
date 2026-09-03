@@ -6,7 +6,7 @@
   <p><a href="#quick-start">Quick Start</a> · <a href="#mvp-workflow">MVP Workflow</a> · <a href="./CONTRIBUTING.md">Contributing</a> · <a href="./LICENSE">License</a></p>
 </div>
 
-## What is AmbiOS AI?
+## What is AmbiOS AI? [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/JustineDevs/ambios-ai) [![Status: Hackathon WebMCP Challenge](https://img.shields.io/badge/status-Hackathon%20WebMCP%20Challenge-7c3aed)](https://webmcp.devpost.com/) [![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-2563eb)](./package.json)
 
 AmbiOS is a WebMCP-native collaboration platform for humans and software agents. It combines operational context, incident response, agent activity, guardrails, documentation proposals, budgets, and integrations behind shared API logic.
 
@@ -22,43 +22,17 @@ AmbiOS is a WebMCP-native collaboration platform for humans and software agents.
 
 ## Quick Start
 
-### Requirements
+Use the production app at [ambios-ai.vercel.app](https://ambios-ai.vercel.app). No local setup or commands are needed.
 
-- Node.js 20+
-- pnpm 9+
-- Supabase project with Google OAuth configured for authenticated mode
+1. Open AmbiOS and sign in.
+2. Select your workspace.
+3. If the navigation is collapsed, use the sidebar menu toggle; open **Agent** and confirm the workspace is ready.
+4. Open **ChatGPT Desktop** or another compatible browser agent with WebMCP enabled. Keep the AmbiOS tab active.
+5. Open the browser agent’s side panel and ask:
 
-```sh
-pnpm install
-cp .env.example .env
-pnpm dev:web
-```
+   > “Use AmbiOS WebMCP to inspect my current workspace readiness and context. Report the workspace status, available capabilities, and any setup blocker. Do not create a proposal, request approval, connect a provider, or execute a write. Then open AmbiOS Tools so I can review the available tools and open Runs to review the inspection.”
 
-In a second terminal, start the local API Worker:
-
-```sh
-pnpm exec wrangler dev --local --ip 127.0.0.1
-```
-
-Open [http://localhost:3000](http://localhost:3000). The Next.js frontend proxies same-origin `/api/*` to the Core Worker at `http://127.0.0.1:8787`; provider execution paths are proxied to the Connector Worker at `http://127.0.0.1:8788`.
-
-### Commands
-
-| Command | Description |
-| --- | --- |
-| `pnpm dev:web` | Start the canonical Next.js application |
-| `pnpm preview:web` | Start the Next.js production server |
-| `pnpm deploy:core` | Deploy the Hono Core API Worker |
-| `pnpm deploy:connector` | Deploy the Hono Connector/Execution Worker |
-| `pnpm build` | Build all workspaces |
-| `pnpm check-types` | Typecheck all workspaces |
-| `pnpm test` | Run application tests |
-| `pnpm webmcp:verify` | Verify WebMCP tool contracts |
-| `pnpm db:migrate` | Apply local D1 migrations |
-| `pnpm db:seed` | Seed the local D1 MVP fixture |
-| `pnpm production:gate` | Run repository production gates and preserve external evidence as `BLOCKED` until verified |
-| `pnpm cloudflare:preflight` | Fail loudly if production Cloudflare IDs or credentials are missing |
-| `pnpm secrets:scan` | Scan repository history for secrets |
+The agent should discover the mounted `ambios.*` WebMCP tools and return a scoped read-only result. If no tools appear, make sure WebMCP is enabled, the AmbiOS tab is active, and you are signed in to the production app. For local development and technical verification, use the [Developer Onboarding guide](./docs/DEVELOPER-ONBOARDING.md). For review instructions, use the [Judge Onboarding guide](./docs/JUDGE-ONBOARDING.md).
 
 ## MVP Workflow
 

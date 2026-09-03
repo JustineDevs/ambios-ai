@@ -54,7 +54,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm cloudflare:preflight
       - name: Deploy Next.js frontend to Vercel
-        run: pnpm dlx vercel@latest deploy apps/web --prod --token "$VERCEL_TOKEN" --yes --scope "$VERCEL_ORG_ID"
+        run: pnpm dlx vercel@latest deploy . --project "$VERCEL_PROJECT_ID" --prod --token "$VERCEL_TOKEN" --yes --scope "$VERCEL_ORG_ID"
       - run: pnpm deploy:core
       - run: pnpm deploy:connector
       - name: Post-deploy smoke
