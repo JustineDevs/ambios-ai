@@ -857,7 +857,10 @@ export const operations = {
     category: "integrations",
     method: "POST",
     pathTemplate: "/api/integrations/:providerId/connect",
-    runtimeOwner: "connector-execution",
+    // Session issuance and workspace integration state belong to the core API.
+    // The connector runtime is reserved for provider reads/writes after a
+    // connection has been authorized and verified.
+    runtimeOwner: "core-api",
     requestSchema: "NangoConnectRequest",
     responseSchema: "Connection",
     idempotencyRequirement: "required",

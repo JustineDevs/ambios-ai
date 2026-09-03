@@ -66,15 +66,23 @@ export default function PluginPage({ params }: { params: Promise<{ provider: str
       const payload = (await response.json().catch(() => null)) as {
         data?: { connectSessionToken?: string };
         detail?: string;
+        error?: string | { message?: string };
       } | null;
+      const providerError =
+        typeof payload?.error === "string" ? payload.error : payload?.error?.message;
       if (!response.ok || !payload?.data?.connectSessionToken)
-        throw new Error(payload?.detail ?? "Provider authorization could not start.");
+        throw new Error(
+          payload?.detail ?? providerError ?? "Provider authorization could not start.",
+        );
       const nango = new Nango();
       nangoRef.current = nango;
       nango
         .openConnectUI({
           sessionToken: payload.data.connectSessionToken,
-          onEvent: () => void load(),
+          onEvent: (event) => {
+            if (event.type === "connect" || event.type === "ready") void load();
+            if (event.type === "error") setError(event.payload.errorMessage);
+          },
         })
         .open();
     } catch (cause) {
