@@ -49,9 +49,10 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
       requestOperation("getWorkspace", { cache: "no-store" }),
       requestOperation("listIntegrations", { cache: "no-store" }),
     ]);
-    const workspacePayload = await readJson<{ organization?: { id: string; name: string } | null }>(
-      workspaceResponse,
-    );
+    const workspacePayload = await readJson<{
+      organization?: { id: string; name: string } | null;
+      data?: { organization?: { id: string; name: string } | null };
+    }>(workspaceResponse);
     const integrationsPayload = await readJson<unknown>(integrationsResponse);
     if (!workspaceResponse.ok || !integrationsResponse.ok) {
       if (workspaceResponse.status >= 500 || integrationsResponse.status >= 500) {
@@ -60,6 +61,7 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
       throw new Error("Setup status is not available for this workspace.");
     }
     const integrations = IntegrationListSchema.parse(integrationsPayload).data.integrations;
+    const workspace = workspacePayload.organization ?? workspacePayload.data?.organization ?? null;
     const readiness: Readiness = {
       ready: ["openai", "github"].every((provider) =>
         integrations.some(
@@ -69,7 +71,7 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
               item.connectionStatus === "authorization_pending"),
         ),
       ),
-      workspace: workspacePayload.organization ?? null,
+      workspace,
       integration: integrations[0]
         ? { provider: integrations[0].providerId, status: integrations[0].connectionStatus }
         : null,
