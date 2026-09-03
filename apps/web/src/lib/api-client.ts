@@ -1,4 +1,5 @@
 import { type OperationId, operationPath } from "@ambios-ai/shared";
+import { createClient } from "./supabase/client.ts";
 import { tokenRegistry } from "./token-registry.ts";
 
 export type ApiProblem = {
@@ -33,7 +34,7 @@ export function operationUrl(
   return `${operationPath(operationId, pathParams)}${suffix ? `?${suffix}` : ""}`;
 }
 
-export function requestOperation(
+export async function requestOperation(
   operationId: OperationId,
   init?: RequestInit,
   pathParams: Record<string, string> = {},
@@ -41,7 +42,18 @@ export function requestOperation(
 ) {
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
-  const accessToken = tokenRegistry.getToken();
+  let accessToken = tokenRegistry.getToken();
+  if (!accessToken && typeof window !== "undefined") {
+    try {
+      const {
+        data: { session },
+      } = await createClient().auth.getSession();
+      accessToken = session?.access_token ?? null;
+      tokenRegistry.setToken(accessToken);
+    } catch {
+      accessToken = null;
+    }
+  }
   if (accessToken && !headers.has("Authorization"))
     headers.set("Authorization", `Bearer ${accessToken}`);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
