@@ -25,6 +25,19 @@ WebMCP is the challenge focus: AmbiOS gives a compatible browser agent a control
 
 The current release catalogs 29 tools and mounts 18 read-only tools in a compatible browser. Consequential tools remain unavailable until their provider adapter, approval path, verification evidence, and external side-effect behavior are proven. Read the [WebMCP implementation](./webmcp/AMBIOS.md) and [verification boundary](./webmcp/VERIFICATION.md) for the precise claim.
 
+The browser registration is implemented in [`webmcp/register.ts`](./webmcp/register.ts) and mounts each tool through the WebMCP browser primitive:
+
+```ts
+document.modelContext.registerTool({
+  name: "ambios.workspace.get_current_context",
+  description: "Read the authenticated AmbiOS workspace context.",
+  inputSchema: { type: "object", additionalProperties: false, properties: {} },
+  execute: async () => readCurrentWorkspace(),
+});
+```
+
+The production implementation supplies the canonical tool schema, authenticated API call, workspace scope, redacted response, safety annotations, and cleanup behavior. The model can request a tool; it cannot grant authorization or bypass server-side governance.
+
 ## Built with <a href="https://nextjs.org/" title="Next.js"><img src="https://cdn.simpleicons.org/nextdotjs/ffffff" alt="Next.js" height="20" /></a> <a href="https://vercel.com/" title="Vercel"><img src="https://cdn.simpleicons.org/vercel/ffffff" alt="Vercel" height="20" /></a> <a href="https://developers.cloudflare.com/workers/" title="Cloudflare Workers"><img src="https://cdn.simpleicons.org/cloudflare/ffffff" alt="Cloudflare Workers" height="20" /></a> <a href="https://openai.com/" title="OpenAI"><img src="https://img.icons8.com/?size=100&amp;id=FBO05Dys9QCg&amp;format=png&amp;color=FFFFFF" alt="OpenAI" height="20" /></a> <a href="https://supabase.com/" title="Supabase Auth"><img src="https://cdn.simpleicons.org/supabase/ffffff" alt="Supabase" height="20" /></a> <a href="https://nango.dev/" title="Nango"><img src="https://cdn.jsdelivr.net/gh/ComposioHQ/open-logos@HEAD/nango-logo.svg" alt="Nango" height="20" style="filter: brightness(0) invert(1)" /></a> <a href="https://www.netlify.com/" title="Netlify provider adapter"><img src="https://cdn.simpleicons.org/netlify/ffffff" alt="Netlify" height="20" /></a> <a href="https://www.shopify.com/" title="Shopify provider adapter"><img src="https://cdn.simpleicons.org/shopify/ffffff" alt="Shopify" height="20" /></a> <a href="https://www.xendit.co/" title="Xendit integration surface"><img src="https://cdn.simpleicons.org/xendit/ffffff" alt="Xendit" height="20" /></a> <a href="https://resend.com/" title="Resend integration surface"><img src="https://cdn.simpleicons.org/resend/ffffff" alt="Resend" height="20" /></a>
 
 The production shape is intentionally split: Next.js is the user-facing application, Hono Workers own the API and governance boundary, and external services are connected only through server-side adapters. The linked architecture and status documents explain the boundaries and evidence behind these technologies.
@@ -136,6 +149,6 @@ The production deployment is intentionally split: the full Next.js application i
 
 <h2 align="center">License</h2>
 
-<p align="center">AmbiOS AI is released under the <a href="./LICENSE">MIT License</a>. Community behavior is governed by the <a href="./CODE_OF_CONDUCT.md">Code of Conduct</a>.</p>
+<p align="center">AmbiOS AI is open source under the <a href="./LICENSE">MIT License</a>. Community behavior is governed by the <a href="./CODE_OF_CONDUCT.md">Code of Conduct</a>.</p>
 
 <div align="center"><sub>Built for safer human-and-agent collaboration by <a href="https://github.com/JustineDevs">@Justinedevs</a>.</sub></div>
