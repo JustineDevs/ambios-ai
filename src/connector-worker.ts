@@ -571,15 +571,26 @@ app.post(operationPath("nangoWebhook"), async (c) => {
     ["sign"],
   );
   const expected = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
-  const encoded = btoa(String.fromCharCode(...new Uint8Array(expected)));
-  if (!signature || signature !== encoded)
-    return c.json({ code: "INVALID_WEBHOOK_SIGNATURE" }, 401);
-  const event = JSON.parse(raw) as {
+  const expectedHex = Array.from(new Uint8Array(expected), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  const provided = signature?.trim().toLowerCase() ?? "";
+  let mismatch = provided.length !== expectedHex.length ? 1 : 0;
+  for (let index = 0; index < expectedHex.length; index++) {
+    mismatch |= (provided.charCodeAt(index) || 0) ^ expectedHex.charCodeAt(index);
+  }
+  if (mismatch !== 0) return c.json({ code: "INVALID_WEBHOOK_SIGNATURE" }, 401);
+  let event: {
     event?: string;
     provider?: string;
     connection_id?: string;
     connectionId?: string;
   };
+  try {
+    event = JSON.parse(raw) as typeof event;
+  } catch {
+    return c.json({ code: "WEBHOOK_INVALID_JSON", error: "Webhook body must be valid JSON." }, 400);
+  }
   const connectionId = event.connection_id ?? event.connectionId;
   const integration = connectionId
     ? await c.env.DB.prepare(
