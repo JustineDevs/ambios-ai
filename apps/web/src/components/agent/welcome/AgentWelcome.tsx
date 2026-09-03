@@ -133,9 +133,18 @@ export function AgentWelcome({ onStartPrompt, ref }: AgentWelcomeProps) {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="text-center">
+      <header className="mx-auto flex max-w-3xl items-center justify-center gap-4 text-left sm:gap-5">
         <BloubBot state="searching" size={80} follow label="AmbiOS welcome assistant" />
-      </div>
+        <div className="min-w-0 space-y-1">
+          <p className="font-medium text-muted-foreground text-xs uppercase tracking-[0.18em]">
+            AmbiOS assistant
+          </p>
+          <h2 className="font-semibold text-xl tracking-tight sm:text-2xl">How can I help?</h2>
+          <p className="max-w-md text-muted-foreground text-sm leading-6">
+            Ask about your workspace, connect a provider, or start a governed workflow.
+          </p>
+        </div>
+      </header>
 
       <div className="mx-auto max-w-3xl">
         <SystemCarousel onSystemSelect={handleSystemSelect} showNavArrows />
