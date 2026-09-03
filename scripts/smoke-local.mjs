@@ -32,27 +32,25 @@ const checks = [
     authenticated || localAuthDisabled ? [200, 403] : [401, 503],
     authenticated || localAuthDisabled
       ? ['"actions"', '"ORGANIZATION_REQUIRED"']
-      : '"AUTH_PROVIDER_NOT_CONFIGURED"',
+      : '"AUTH_REQUIRED"',
   ],
   [
     "integrations resource",
     `${workerUrl}/api/integrations`,
     authenticated ? 200 : localAuthDisabled ? 200 : [401, 503],
-    authenticated || localAuthDisabled ? '"integrations"' : '"AUTH_PROVIDER_NOT_CONFIGURED"',
+    authenticated || localAuthDisabled ? '"integrations"' : '"AUTH_REQUIRED"',
   ],
   [
     "vendor action boundary",
     `${workerUrl}/api/integrations/snyk/vulnerabilities`,
     authenticated || localAuthDisabled ? 503 : [401, 503],
-    authenticated || localAuthDisabled
-      ? '"VENDOR_ACTION_UNAVAILABLE"'
-      : '"AUTH_PROVIDER_NOT_CONFIGURED"',
+    authenticated || localAuthDisabled ? '"VENDOR_ACTION_UNAVAILABLE"' : '"AUTH_REQUIRED"',
   ],
   [
     "deployment approval boundary",
     `${workerUrl}/api/backend/deploy`,
     authenticated || localAuthDisabled ? 403 : [401, 503],
-    authenticated || localAuthDisabled ? '"APPROVAL_REQUIRED"' : '"AUTH_PROVIDER_NOT_CONFIGURED"',
+    authenticated || localAuthDisabled ? '"APPROVAL_REQUIRED"' : '"AUTH_REQUIRED"',
     "POST",
     { service: "cloudflare", environment: "staging", operation: "deploy" },
   ],
@@ -61,9 +59,7 @@ const checks = [
     "unsupported route boundary",
     `${workerUrl}/api/not-yet-mounted`,
     authenticated || localAuthDisabled ? 404 : [401, 503],
-    authenticated || localAuthDisabled
-      ? '"code":"NOT_FOUND"'
-      : '"AUTH_PROVIDER_NOT_CONFIGURED"',
+    authenticated || localAuthDisabled ? '"code":"NOT_FOUND"' : '"AUTH_REQUIRED"',
   ],
 ];
 
@@ -73,7 +69,8 @@ for (const [label, url, expectedStatus, marker, method, body] of checks) {
     const { response, body: responseBody } = await request(url, body, method);
     const statuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
     const markers = Array.isArray(marker) ? marker : [marker];
-    const passed = statuses.includes(response.status) && markers.some((value) => responseBody.includes(value));
+    const passed =
+      statuses.includes(response.status) && markers.some((value) => responseBody.includes(value));
     console.log(`${passed ? "PASS" : "FAIL"} ${label}: HTTP ${response.status}`);
     if (!passed) failed = true;
   } catch (error) {
