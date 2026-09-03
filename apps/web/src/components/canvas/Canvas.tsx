@@ -1,18 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ReactFlow, {
-  applyEdgeChanges,
-  applyNodeChanges,
-  Background,
-  Controls,
-  MiniMap,
-  type NodeTypes,
-  type OnEdgesChange,
-  type OnNodesChange,
-} from "reactflow";
+import ReactFlow, { Background, Controls, MiniMap, type NodeTypes } from "reactflow";
 import "reactflow/dist/style.css";
-import { broadcastCanvasEvent, subscribeToCanvas } from "@/lib/canvas/realtime";
+import { subscribeToCanvas } from "@/lib/canvas/realtime";
 import { useCanvasStore } from "@/lib/canvas/store";
 import type { CanvasEdge, CanvasNode as CanvasNodeModel } from "@/lib/canvas/types";
 import { AgentCursor } from "./AgentCursor";
@@ -77,18 +68,6 @@ export function Canvas({
       void channel?.unsubscribe();
     };
   }, [canvasId, setActiveUsers, setAgentCursor, setEdges, setNodes, shareLink]);
-  const onNodesChange: OnNodesChange = (changes) => {
-    const nextNodes = applyNodeChanges(changes, nodes) as CanvasNodeModel[];
-    setNodes(nextNodes);
-    for (const node of nextNodes) {
-      void broadcastCanvasEvent(canvasId, "node-update", { node }, shareLink);
-    }
-  };
-  const onEdgesChange: OnEdgesChange = (changes) => {
-    const nextEdges = applyEdgeChanges(changes, edges);
-    setEdges(nextEdges);
-    void broadcastCanvasEvent(canvasId, "edges-update", { edges: nextEdges }, shareLink);
-  };
   return (
     <section
       className="relative h-[min(70vh,680px)] min-h-[420px] overflow-hidden rounded-xl border bg-muted/20"
@@ -99,8 +78,9 @@ export function Canvas({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable
         fitView
       >
         <Background />
@@ -117,6 +97,12 @@ export function Canvas({
           workspace access.
         </p>
       )}
+      <p
+        className="absolute bottom-3 left-3 rounded-md border bg-background/90 px-2 py-1 text-muted-foreground text-xs"
+        role="status"
+      >
+        Persisted projection · read-only
+      </p>
     </section>
   );
 }

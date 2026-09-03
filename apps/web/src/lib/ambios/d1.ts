@@ -408,6 +408,7 @@ export async function getCanvasForUser(userId: string, incidentId: string) {
     incident?: { id: string; title: string; service: string; status: string; context: string };
     nodes?: Array<Record<string, unknown>>;
     edges?: Array<Record<string, unknown>>;
+    source?: string;
   }>("getCanvas", { canvasId: incidentId });
   return result ?? null;
 }

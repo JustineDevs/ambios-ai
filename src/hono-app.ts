@@ -7,6 +7,7 @@ import {
 } from "../packages/shared";
 import { operationPath, operations } from "../packages/shared/operations";
 import { serviceOriginsFromEnv } from "../packages/shared/service-origins";
+import { buildCanvasTopology } from "./canvas-topology";
 import { createMcpRoutes } from "./mcp-routes";
 import { registerOperation } from "./operation-routes";
 import { problem } from "./problem";
@@ -318,21 +319,31 @@ export function createHonoApp() {
     const organization = await organizationFor(c);
     const row = shareLink
       ? await c.env.DB.prepare(
-          "SELECT i.id, i.title, i.context, i.status, i.service FROM incidents i JOIN canvas_shares s ON s.canvas_id = i.id WHERE i.id = ? AND s.share_link = ? AND s.mode = 'public' AND (s.expires_at IS NULL OR datetime(s.expires_at) > datetime('now')) LIMIT 1",
+          "SELECT i.id, i.organization_id AS organizationId, i.title, i.context, i.status, i.service, i.severity FROM incidents i JOIN canvas_shares s ON s.canvas_id = i.id AND s.organization_id = i.organization_id WHERE i.id = ? AND s.share_link = ? AND s.mode = 'public' AND (s.expires_at IS NULL OR datetime(s.expires_at) > datetime('now')) LIMIT 1",
         )
           .bind(canvasId, shareLink)
-          .first<{ id: string; title: string; context: string; status: string; service: string }>()
+          .first<{
+            id: string;
+            organizationId: string;
+            title: string;
+            context: string;
+            status: string;
+            service: string;
+            severity: string;
+          }>()
       : organization
         ? await c.env.DB.prepare(
-            "SELECT id, title, context, status, service FROM incidents WHERE id = ? AND organization_id = ? LIMIT 1",
+            "SELECT id, organization_id AS organizationId, title, context, status, service, severity FROM incidents WHERE id = ? AND organization_id = ? LIMIT 1",
           )
             .bind(canvasId, organization.id)
             .first<{
               id: string;
+              organizationId: string;
               title: string;
               context: string;
               status: string;
               service: string;
+              severity: string;
             }>()
         : null;
     if (!row)
@@ -340,39 +351,66 @@ export function createHonoApp() {
         { code: "CANVAS_NOT_FOUND", error: "Canvas is not available in this workspace." },
         404,
       );
-    const actionRows = organization
-      ? await c.env.DB.prepare(
-          "SELECT id, action_type AS actionType, status, summary, created_at AS createdAt FROM actions WHERE organization_id = ? AND incident_id = ? ORDER BY created_at DESC LIMIT 50",
-        )
-          .bind(organization.id, canvasId)
-          .all()
-      : { results: [] };
-    const nodes = [
-      {
-        id: `incident:${row.id}`,
-        type: "incident",
-        position: { x: 0, y: 0 },
-        data: { label: row.title, description: row.context, status: row.status },
-      },
-      ...(actionRows.results ?? []).map((action, index) => ({
-        id: `action:${action.id}`,
-        type: "action",
-        position: { x: 320, y: index * 150 },
+    // Public share links intentionally expose only the shared incident. Related
+    // lifecycle records are workspace-private and must never be inferred from a
+    // caller's current organization.
+    if (shareLink) {
+      const { organizationId: _organizationId, ...incident } = row;
+      const publicGraph = buildCanvasTopology({
+        incident,
+        actions: [],
+        operations: [],
+        decisions: [],
+        docs: [],
+        integrations: [],
+      });
+      return c.json({
         data: {
-          label: action.actionType,
-          description: action.summary,
-          status: action.status,
+          incident,
+          ...publicGraph,
+          source: "public-share",
         },
-      })),
-    ];
-    const edges = (actionRows.results ?? []).map((action) => ({
-      id: `incident-action:${row.id}:${action.id}`,
-      source: `incident:${row.id}`,
-      target: `action:${action.id}`,
-      data: { relationship: "triggers_proposal_for" },
-      label: "triggers_proposal_for",
-    }));
-    return c.json({ data: { incident: row, nodes, edges, source: "persisted" } });
+      });
+    }
+    if (!organization)
+      return c.json({ code: "ORGANIZATION_REQUIRED", error: "Workspace not found." }, 403);
+    const [actionRows, operationRows, decisionRows, docRows, integrationRows] = await Promise.all([
+      c.env.DB.prepare(
+        "SELECT id, action_type AS actionType, status, approval_state AS approvalState, summary, operation_id AS operationId, related_resource_type AS relatedResourceType, related_resource_id AS relatedResourceId, created_at AS createdAt FROM actions WHERE organization_id = ? AND incident_id = ? ORDER BY created_at DESC LIMIT 50",
+      )
+        .bind(organization.id, canvasId)
+        .all(),
+      c.env.DB.prepare(
+        "SELECT o.id, o.kind, o.state, o.resource_type AS resourceType, o.resource_id AS resourceId, o.updated_at AS updatedAt FROM operations o WHERE o.organization_id = ? AND EXISTS (SELECT 1 FROM actions a WHERE a.operation_id = o.id AND a.organization_id = ? AND a.incident_id = ?) ORDER BY o.updated_at DESC LIMIT 50",
+      )
+        .bind(organization.id, organization.id, canvasId)
+        .all(),
+      c.env.DB.prepare(
+        "SELECT d.id, d.operation_id AS operationId, d.verdict, d.reason_code AS reasonCode, d.evaluated_at AS evaluatedAt FROM sage_decisions d WHERE d.organization_id = ? AND EXISTS (SELECT 1 FROM actions a WHERE a.operation_id = d.operation_id AND a.organization_id = ? AND a.incident_id = ?) ORDER BY d.evaluated_at DESC LIMIT 50",
+      )
+        .bind(organization.id, organization.id, canvasId)
+        .all(),
+      c.env.DB.prepare(
+        "SELECT id, title, status, version FROM docs WHERE organization_id = ? AND incident_id = ? ORDER BY created_at DESC LIMIT 25",
+      )
+        .bind(organization.id, canvasId)
+        .all(),
+      c.env.DB.prepare(
+        "SELECT id, provider, provider_display_name AS providerDisplayName, status, connection_health AS connectionHealth, resource_mapping_status AS resourceMappingStatus, mapped_resource_count AS mappedResourceCount FROM integrations WHERE organization_id = ? ORDER BY created_at DESC LIMIT 25",
+      )
+        .bind(organization.id)
+        .all(),
+    ]);
+    const graph = buildCanvasTopology({
+      incident: row,
+      actions: actionRows.results as never,
+      operations: operationRows.results as never,
+      decisions: decisionRows.results as never,
+      docs: docRows.results as never,
+      integrations: integrationRows.results as never,
+    });
+    const { organizationId: _organizationId, ...incident } = row;
+    return c.json({ data: { incident, ...graph } });
   });
 
   app.get(operationPath("getCanvasAccess"), async (c) => {

@@ -44,9 +44,11 @@ export default async function IncidentCanvasPage({
         role="status"
         aria-label="Canvas data status"
       >
-        <span className="rounded-full border px-2 py-1">Source: Hono graph API</span>
+        <span className="rounded-full border px-2 py-1">
+          Source: {graph?.source ?? "persisted projection"}
+        </span>
         <span className="rounded-full border px-2 py-1">Incident: {incident.status}</span>
-        <span className="rounded-full border px-2 py-1">Workspace-scoped</span>
+        <span className="rounded-full border px-2 py-1">Read-only · workspace-scoped</span>
       </div>
       <Canvas
         canvasId={id}
