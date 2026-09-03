@@ -126,8 +126,8 @@ export const INTEGRATION_CATALOG = [
     description: "Cataloged for a future design-context connector phase.",
   },
   {
-    provider: "frame",
-    label: "Frame.io",
+    provider: "framer",
+    label: "Framer",
     phase: "roadmap",
     auth: "nango",
     description: "Cataloged for a future media-review connector phase.",
@@ -172,6 +172,6 @@ export const INTEGRATION_PERMISSIONS: Record<IntegrationCatalogProvider, readonl
   hubspot: ["Read CRM records", "Create and update authorized CRM records"],
   stripe: ["Read customers and payment metadata", "No payout or account-owner access"],
   figma: ["Read files, projects, and comments", "Prepare governed design-context proposals"],
-  frame: ["Read projects and review metadata", "Prepare governed review proposals"],
+  framer: ["Read sites and project metadata", "Prepare governed design proposals"],
   "custom-rest": ["Access only the API endpoints configured by you"],
 };

@@ -15,7 +15,7 @@ export const PROVIDERS = [
   "hubspot",
   "stripe",
   "figma",
-  "frame",
+  "framer",
   "custom-rest",
   "snyk",
   "socket",

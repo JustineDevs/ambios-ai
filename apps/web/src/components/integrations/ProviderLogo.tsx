@@ -11,6 +11,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   siCloudflare,
   siFigma,
+  siFramer,
   siGithub,
   siGoogleanalytics,
   siGooglecalendar,
@@ -36,6 +37,7 @@ const ICONS = {
   notion: siNotion,
   cloudflare: siCloudflare,
   figma: siFigma,
+  framer: siFramer,
   github: siGithub,
   vercel: siVercel,
   netlify: siNetlify,
@@ -76,25 +78,13 @@ const LABELS: Record<Provider, string> = {
   hubspot: "HubSpot",
   stripe: "Stripe",
   figma: "Figma",
-  frame: "Frame.io",
+  framer: "Framer",
   "custom-rest": "Custom REST API",
   snyk: "Snyk",
   socket: "Socket.dev",
 };
 
-function FrameLogo({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="Frame.io">
-      <path
-        fill="currentColor"
-        d="M4 3h6v3H7v4h3v3H7v5h3v3H4V3Zm10 0h6v18h-6v-3h3v-5h-3v-3h3V6h-3V3Z"
-      />
-    </svg>
-  );
-}
-
 export function ProviderLogo({ provider, size = 20 }: { provider: Provider; size?: number }) {
-  if (provider === "frame") return <FrameLogo size={size} />;
   const hugeIcon = HUGEICONS[provider as keyof typeof HUGEICONS];
   if (hugeIcon) {
     const brand = ICONS[provider as keyof typeof ICONS];
