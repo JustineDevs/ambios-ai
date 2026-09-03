@@ -1,0 +1,321 @@
+"use client";
+
+import type { Message } from "@ambios-ai/shared";
+import { useCallback, useRef } from "react";
+import type { AgentConfig, UseAgentStreamingReturn } from "./types";
+
+interface UseAgentStreamingOptions {
+  config: AgentConfig;
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  updateMessageWithData: (msg: Message, data: any, targetMessage: Message) => Message;
+  updateToolCompletion: (toolCallId: string, data: any) => void;
+}
+
+export type StreamState = "idle" | "streaming" | "paused";
+
+export function useAgentStreaming({
+  config,
+  setMessages,
+  updateMessageWithData,
+  updateToolCompletion,
+}: UseAgentStreamingOptions): UseAgentStreamingReturn {
+  const streamDripBufferRef = useRef("");
+  const streamDripTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentStreamControllerRef = useRef<AbortController | null>(null);
+  const streamStateRef = useRef<StreamState>("idle");
+
+  const startDrip = useCallback(
+    (assistantMessageId: string) => {
+      if (streamDripTimerRef.current) return;
+      streamDripTimerRef.current = setInterval(() => {
+        if (!streamDripBufferRef.current) return;
+
+        let charsToAdd = 1;
+        const bufferLength = streamDripBufferRef.current.length;
+        if (bufferLength > 100) charsToAdd = Math.min(20, Math.ceil(bufferLength / 10));
+        else if (bufferLength > 50) charsToAdd = 8;
+        else if (bufferLength > 20) charsToAdd = 4;
+        else if (bufferLength > 10) charsToAdd = 2;
+
+        const toAdd = streamDripBufferRef.current.slice(0, charsToAdd);
+        streamDripBufferRef.current = streamDripBufferRef.current.slice(charsToAdd);
+
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id !== assistantMessageId) return msg;
+            if (msg.parts && msg.parts.length > 0) {
+              const lastPart = msg.parts[msg.parts.length - 1];
+              if (lastPart.type === "content") {
+                const updatedParts = [...msg.parts];
+                updatedParts[updatedParts.length - 1] = {
+                  ...lastPart,
+                  content: (lastPart.content || "") + toAdd,
+                };
+                return { ...msg, parts: updatedParts };
+              }
+              return {
+                ...msg,
+                parts: [
+                  ...msg.parts,
+                  { type: "content", content: toAdd, id: `content-${msg.parts.length}` },
+                ],
+              };
+            }
+            return { ...msg, content: msg.content + toAdd };
+          }),
+        );
+      }, 32);
+    },
+    [setMessages],
+  );
+
+  const stopDrip = useCallback(() => {
+    if (streamDripTimerRef.current) {
+      clearInterval(streamDripTimerRef.current);
+      streamDripTimerRef.current = null;
+    }
+  }, []);
+
+  const abortStream = useCallback(() => {
+    if (currentStreamControllerRef.current) {
+      currentStreamControllerRef.current.abort();
+      currentStreamControllerRef.current = null;
+    }
+  }, []);
+
+  const processStreamData = useCallback(
+    async (
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      currentAssistantMessage: Message | null,
+      createMessageIfNeeded: () => Message,
+    ) => {
+      const decoder = new TextDecoder();
+      streamDripBufferRef.current = "";
+      stopDrip();
+
+      if (currentAssistantMessage?.parts?.length) {
+        const last = currentAssistantMessage.parts[currentAssistantMessage.parts.length - 1];
+        if (last.type === "content" && last.content?.trim()) {
+          const id = currentAssistantMessage.id;
+          const partId = `content-${currentAssistantMessage.parts.length}`;
+          const emptyPart = { type: "content" as const, content: "", id: partId };
+          setMessages((prev) =>
+            prev.map((m) => (m.id === id ? { ...m, parts: [...(m.parts || []), emptyPart] } : m)),
+          );
+        }
+      }
+
+      let assistantMessage = currentAssistantMessage;
+
+      const ensureMessage = (): Message => {
+        if (!assistantMessage) {
+          assistantMessage = createMessageIfNeeded();
+          setMessages((prev) => [...prev, assistantMessage!]);
+        }
+        return assistantMessage;
+      };
+
+      let lineBuffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            const finalChunk = decoder.decode();
+            lineBuffer += finalChunk;
+
+            if (lineBuffer.trim() && lineBuffer.startsWith("data: ")) {
+              const rawData = lineBuffer.slice(6);
+              try {
+                const data = JSON.parse(rawData);
+                if (data.type === "system_message") {
+                  const sysMsg: Message = {
+                    id: data.systemMessage.id,
+                    role: "system",
+                    content: data.systemMessage.content,
+                    timestamp: new Date(),
+                  };
+                  setMessages((prev) => [sysMsg, ...prev]);
+                } else {
+                  const msg = ensureMessage();
+                  if (data.type === "tool_call_complete") {
+                    updateToolCompletion(data.toolCall.id, data);
+
+                    let parsedOutput: any = null;
+                    try {
+                      parsedOutput =
+                        typeof data.toolCall.output === "string"
+                          ? JSON.parse(data.toolCall.output)
+                          : data.toolCall.output;
+                    } catch {}
+
+                    config.onToolComplete?.(data.toolCall.name, data.toolCall.id, parsedOutput);
+                  } else if (data.type !== "content") {
+                    setMessages((prev) => prev.map((m) => updateMessageWithData(m, data, msg)));
+                  }
+                }
+              } catch (parseError) {
+                console.error(
+                  "[StreamDebug] Failed to parse final buffer:",
+                  parseError,
+                  "buffer preview:",
+                  lineBuffer.substring(0, 200),
+                );
+              }
+            }
+            break;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          const combined = lineBuffer + chunk;
+          const lines = combined.split("\n");
+
+          lineBuffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (data.type === "system_message") {
+                  const sysMsg: Message = {
+                    id: data.systemMessage.id,
+                    role: "system",
+                    content: data.systemMessage.content,
+                    timestamp: new Date(),
+                  };
+                  setMessages((prev) => [sysMsg, ...prev]);
+                  continue;
+                }
+
+                const msg = ensureMessage();
+
+                if (data.type === "content") {
+                  streamDripBufferRef.current += data.content;
+                  startDrip(msg.id);
+                  continue;
+                }
+
+                if (data.type === "error") {
+                  // Add error as a special content part with error details
+                  setMessages((prev) =>
+                    prev.map((m) => {
+                      if (m.id !== msg.id) return m;
+                      const errorPart = {
+                        type: "error" as const,
+                        content: data.content,
+                        errorDetails: data.errorDetails,
+                        id: `error-${Date.now()}`,
+                      };
+                      return {
+                        ...m,
+                        parts: [...(m.parts || []), errorPart],
+                        isStreaming: false,
+                      };
+                    }),
+                  );
+                  continue;
+                }
+
+                while (streamDripBufferRef.current) {
+                  await new Promise((resolve) => setTimeout(resolve, 10));
+                }
+
+                if (data.type === "tool_call_complete") {
+                  updateToolCompletion(data.toolCall.id, data);
+
+                  let parsedOutput: any = null;
+                  try {
+                    parsedOutput =
+                      typeof data.toolCall.output === "string"
+                        ? JSON.parse(data.toolCall.output)
+                        : data.toolCall.output;
+                  } catch (e) {
+                    console.warn(
+                      "[StreamDebug] Failed to parse tool output:",
+                      e,
+                      "output preview:",
+                      typeof data.toolCall.output === "string"
+                        ? data.toolCall.output.substring(0, 300)
+                        : data.toolCall.output,
+                    );
+                  }
+
+                  config.onToolComplete?.(data.toolCall.name, data.toolCall.id, parsedOutput);
+                } else if (data.type === "paused") {
+                  streamStateRef.current = "paused";
+                  setMessages((prev) =>
+                    prev.map((m) => (m.id === msg.id ? { ...m, isStreaming: false } : m)),
+                  );
+                  return;
+                } else {
+                  setMessages((prev) => prev.map((m) => updateMessageWithData(m, data, msg)));
+                }
+              } catch (parseError) {
+                console.error(
+                  "[StreamDebug] Failed to parse SSE line:",
+                  parseError,
+                  "line length:",
+                  line.length,
+                  "line preview:",
+                  line.substring(0, 300),
+                );
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          console.log("Stream was aborted");
+        } else {
+          throw error;
+        }
+      } finally {
+        if (assistantMessage && streamDripBufferRef.current) {
+          const finalMsgId = assistantMessage.id;
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== finalMsgId) return msg;
+              if (msg.parts && msg.parts.length > 0) {
+                const lastPart = msg.parts[msg.parts.length - 1];
+                if (lastPart.type === "content") {
+                  const updatedParts = [...msg.parts];
+                  updatedParts[updatedParts.length - 1] = {
+                    ...lastPart,
+                    content: (lastPart.content || "") + streamDripBufferRef.current,
+                  };
+                  return { ...msg, parts: updatedParts };
+                }
+                return {
+                  ...msg,
+                  parts: [
+                    ...msg.parts,
+                    {
+                      type: "content",
+                      content: streamDripBufferRef.current,
+                      id: `content-${msg.parts.length}`,
+                    },
+                  ],
+                };
+              }
+              return { ...msg, content: msg.content + streamDripBufferRef.current };
+            }),
+          );
+          streamDripBufferRef.current = "";
+        }
+        stopDrip();
+      }
+    },
+    [setMessages, startDrip, stopDrip, updateMessageWithData, updateToolCompletion, config],
+  );
+
+  return {
+    processStreamData,
+    currentStreamControllerRef,
+    streamStateRef,
+    abortStream,
+    startDrip,
+    stopDrip,
+    streamDripBufferRef,
+  };
+}

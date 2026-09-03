@@ -1,0 +1,12 @@
+# Default owner for all repository files
+* @Justinedevs
+
+# Path ownership keeps review responsibility visible even while the project has one maintainer.
+/apps/web/ @Justinedevs
+/src/ @Justinedevs
+/packages/db/ @Justinedevs
+/packages/api/ @Justinedevs
+/packages/shared/ @Justinedevs
+/webmcp/ @Justinedevs
+/docs/ @Justinedevs
+/.github/ @Justinedevs

@@ -1,0 +1,205 @@
+"use client";
+
+import type { Tool } from "@ambios-ai/shared";
+import {
+  type ComponentType,
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { AccessRulesContext } from "@/lib/agent/agent-types";
+import type { ToolDraft } from "@/lib/storage";
+import {
+  PlaygroundAgentSidebar,
+  type PlaygroundMode,
+  type SystemConfigForAgent,
+} from "../tools/agent/PlaygroundAgentSidebar";
+
+type SetInputFn = (message: string) => void;
+type ResetChatFn = () => void;
+
+interface RightSidebarContextType {
+  showAgent: boolean;
+  setShowAgent: (show: boolean) => void;
+  agentPortalRef: HTMLDivElement | null;
+  setAgentPortalRef: (ref: HTMLDivElement | null) => void;
+  AgentSidebarComponent: ComponentType<{
+    className?: string;
+    hideHeader?: boolean;
+    initialError?: string;
+    mode?: PlaygroundMode;
+    systemConfig?: SystemConfigForAgent;
+  }> | null;
+  registerSetAgentInput: (fn: SetInputFn) => void;
+  sendMessageToAgent: (message: string) => void;
+  registerSetSidebarExpanded: (fn: (expanded: boolean) => void) => void;
+  registerResetAgentChat: (fn: ResetChatFn) => void;
+  resetAgentChat: () => void;
+  agentMode: PlaygroundMode;
+  setAgentMode: (mode: PlaygroundMode) => void;
+  systemConfig: SystemConfigForAgent | undefined;
+  setSystemConfig: (config: SystemConfigForAgent | undefined) => void;
+  accessRulesContext: AccessRulesContext | undefined;
+  setAccessRulesContext: (ctx: AccessRulesContext | undefined) => void;
+  onRoleDraftUpdate: ((newConfig: any) => void) | undefined;
+  setOnRoleDraftUpdate: (fn: ((newConfig: any) => void) | undefined) => void;
+  savedTool: Tool | null;
+  setSavedTool: (tool: Tool | null) => void;
+  playgroundTool: Tool | null;
+  setPlaygroundTool: (tool: Tool | null) => void;
+  onRestoreDraft?: (draft: ToolDraft) => void;
+  setOnRestoreDraft: (fn: ((draft: ToolDraft) => void) | undefined) => void;
+}
+
+const RightSidebarContext = createContext<RightSidebarContextType>({
+  showAgent: false,
+  setShowAgent: () => {},
+  agentPortalRef: null,
+  setAgentPortalRef: () => {},
+  AgentSidebarComponent: null,
+  registerSetAgentInput: () => {},
+  sendMessageToAgent: () => {},
+  registerSetSidebarExpanded: () => {},
+  registerResetAgentChat: () => {},
+  resetAgentChat: () => {},
+  agentMode: "tool",
+  setAgentMode: () => {},
+  systemConfig: undefined,
+  setSystemConfig: () => {},
+  accessRulesContext: undefined,
+  setAccessRulesContext: () => {},
+  onRoleDraftUpdate: undefined,
+  setOnRoleDraftUpdate: () => {},
+  savedTool: null,
+  setSavedTool: () => {},
+  playgroundTool: null,
+  setPlaygroundTool: () => {},
+  onRestoreDraft: undefined,
+  setOnRestoreDraft: () => {},
+});
+
+export function RightSidebarProvider({ children }: { children: ReactNode }) {
+  const [showAgent, setShowAgent] = useState(false);
+  const [agentPortalRef, setAgentPortalRef] = useState<HTMLDivElement | null>(null);
+  const [sidebarExpanded, setSidebarExpandedState] = useState(false);
+  const [agentMode, setAgentMode] = useState<PlaygroundMode>("tool");
+  const [systemConfig, setSystemConfig] = useState<SystemConfigForAgent | undefined>(undefined);
+  const [accessRulesContext, setAccessRulesContext] = useState<AccessRulesContext | undefined>(
+    undefined,
+  );
+  const [savedTool, setSavedTool] = useState<Tool | null>(null);
+  const [playgroundTool, setPlaygroundTool] = useState<Tool | null>(null);
+  const onRestoreDraftRef = useRef<((draft: ToolDraft) => void) | null>(null);
+  const onRoleDraftUpdateRef = useRef<((newConfig: any) => void) | null>(null);
+  const setAgentInputRef = useRef<SetInputFn | null>(null);
+  const setSidebarExpandedRef = useRef<((expanded: boolean) => void) | null>(null);
+  const resetAgentChatRef = useRef<ResetChatFn | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "l") {
+        e.preventDefault();
+        setSidebarExpandedRef.current?.(!sidebarExpanded);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [sidebarExpanded]);
+
+  const registerSetAgentInput = useCallback((fn: SetInputFn) => {
+    setAgentInputRef.current = fn;
+  }, []);
+
+  const registerSetSidebarExpanded = useCallback((fn: (expanded: boolean) => void) => {
+    setSidebarExpandedRef.current = (expanded: boolean) => {
+      setSidebarExpandedState(expanded);
+      fn(expanded);
+    };
+  }, []);
+
+  const registerResetAgentChat = useCallback((fn: ResetChatFn) => {
+    resetAgentChatRef.current = fn;
+  }, []);
+
+  const resetAgentChat = useCallback(() => {
+    resetAgentChatRef.current?.();
+  }, []);
+
+  const sendMessageToAgent = useCallback((message: string) => {
+    setSidebarExpandedRef.current?.(true);
+    setAgentInputRef.current?.(message);
+  }, []);
+
+  const setOnRestoreDraft = useCallback((fn: ((draft: ToolDraft) => void) | undefined) => {
+    onRestoreDraftRef.current = fn || null;
+  }, []);
+
+  const onRestoreDraft = useCallback((draft: ToolDraft) => {
+    onRestoreDraftRef.current?.(draft);
+  }, []);
+
+  const setOnRoleDraftUpdate = useCallback((fn: ((newConfig: any) => void) | undefined) => {
+    onRoleDraftUpdateRef.current = fn || null;
+  }, []);
+
+  const onRoleDraftUpdate = useCallback((newConfig: any) => {
+    onRoleDraftUpdateRef.current?.(newConfig);
+  }, []);
+
+  const value = useMemo<RightSidebarContextType>(
+    () => ({
+      showAgent,
+      setShowAgent,
+      agentPortalRef,
+      setAgentPortalRef,
+      AgentSidebarComponent: PlaygroundAgentSidebar,
+      registerSetAgentInput,
+      sendMessageToAgent,
+      registerSetSidebarExpanded,
+      registerResetAgentChat,
+      resetAgentChat,
+      agentMode,
+      setAgentMode,
+      systemConfig,
+      setSystemConfig,
+      accessRulesContext,
+      setAccessRulesContext,
+      onRoleDraftUpdate,
+      setOnRoleDraftUpdate,
+      savedTool,
+      setSavedTool,
+      playgroundTool,
+      setPlaygroundTool,
+      onRestoreDraft,
+      setOnRestoreDraft,
+    }),
+    [
+      showAgent,
+      agentPortalRef,
+      registerSetAgentInput,
+      sendMessageToAgent,
+      registerSetSidebarExpanded,
+      registerResetAgentChat,
+      resetAgentChat,
+      agentMode,
+      systemConfig,
+      accessRulesContext,
+      onRoleDraftUpdate,
+      setOnRoleDraftUpdate,
+      savedTool,
+      playgroundTool,
+      onRestoreDraft,
+      setOnRestoreDraft,
+    ],
+  );
+
+  return <RightSidebarContext.Provider value={value}>{children}</RightSidebarContext.Provider>;
+}
+
+export const useRightSidebar = () => useContext(RightSidebarContext);

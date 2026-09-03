@@ -1,0 +1,556 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  overflow: hidden;
+  font-family: var(--font-jetbrains-sans);
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Allow scrolling for embedded and portal pages */
+body:has([data-embedded-page]),
+body:has([data-portal-page]) {
+  overflow: auto;
+}
+
+/* Stable scrollbars for scrollable sections to prevent horizontal layout shift */
+.stable-scrollbar,
+[data-stable-scrollbar="true"] {
+  scrollbar-gutter: stable both-edges;
+}
+
+code,
+pre,
+tt {
+  font-family: var(--font-jetbrains-mono);
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    /* #fff (white) */
+    --foreground: 220 7% 10%;
+    /* #191c20 (very dark grey) */
+    --card: 220 7% 98%;
+    /* #f7f8fa (very light grey) */
+    --card-foreground: 220 7% 10%;
+    /* #191c20 */
+    --popover: 220 7% 98%;
+    /* #f7f8fa */
+    --popover-foreground: 220 7% 12%;
+    /* #1e2126 */
+    --primary: 220 7% 0%;
+    /* #e5e7eb (light grey) */
+    --primary-foreground: 220 7% 100%;
+    /* #32343a (black) */
+    --primary-hover: 220 7% 25%;
+    /* #32343a */
+    --primary-hover-foreground: 220 7% 100%;
+    /* #fff */
+    --secondary: 220 7% 96%;
+    /* #f3f4f6 */
+    --secondary-foreground: 220 7% 90%;
+    /* #e5e7eb */
+    --muted: 220 7% 98%;
+    /* #f7f8fa */
+    --muted-foreground: 220 7% 40%;
+    /* #191c20 */
+    --border: 220 7% 90%;
+    /* #e5e7eb */
+    --input: 220 7% 80%;
+    /* #cfd2d6 */
+    --hover: 220 7% 82%;
+    /* #d7dbe0 */
+    --accent: 220 7% 80%;
+    /* #cfd2d6 */
+    --accent-foreground: 0 0% 100%;
+    /* #fff */
+    --destructive: 0 55% 45%;
+    /* softer red */
+    --destructive-foreground: 0 0% 100%;
+    /* #fff */
+    --ring: 220 7% 20%;
+    /* #32343a */
+    --radius: 0.5rem;
+    --chart-0: 220 7% 35%;
+    --chart-1: 210 100% 50%;
+    /* #1473e6 */
+    --chart-2: 180 70% 45%;
+    /* #2bbecf */
+    --chart-3: 280 65% 55%;
+    /* #a259e6 */
+    --chart-4: 330 75% 55%;
+    /* #e14b8c */
+    --chart-5: 150 65% 45%;
+    /* #3ecf8e */
+    --outline: 220 7% 20%;
+    /* #32343a */
+    --outline-foreground: 220 7% 0%;
+    /* #000 */
+    --outline-border: 220 7% 80%;
+    /* #cfd2d6 */
+    --ghost-foreground: 220 7% 20%;
+    /* #32343a */
+    --ghost-hover: 220 7% 80%;
+    /* #cfd2d6 */
+    --link: 210 100% 50%;
+    /* #1473e6 */
+    --link-foreground: 0 0% 100%;
+    /* #fff */
+  }
+
+  .dark {
+    --background: 0 0% 5%;
+    /* #000 */
+    --foreground: 0 0% 100%;
+    /* #fff */
+    --card: 220 7% 10%;
+    /* slightly lighter card */
+    --card-foreground: 0 0% 100%;
+    /* #fff */
+    --popover: 0 0% 10%;
+    /* slightly lighter popover */
+    --popover-foreground: 0 0% 100%;
+    /* #fff */
+    --primary: 220 7% 35%;
+    /* lighter primary */
+    --primary-foreground: 220 7% 100%;
+    /* #fff */
+    --primary-hover: 220 7% 90%;
+    /* #e5e7eb */
+    --primary-hover-foreground: 220 7% 20%;
+    /* #32343a */
+    --secondary: 220 7% 14%;
+    /* lighter secondary */
+    --secondary-foreground: 220 7% 25%;
+    /* lighter secondary foreground */
+    --muted: 0 0% 14%;
+    /* lighter muted */
+    --muted-foreground: 0 0% 60%;
+    /* lighter muted foreground for better readability */
+    --accent: 220 7% 25%;
+    /* lighter accent */
+    --accent-foreground: 0 0% 100%;
+    /* #fff */
+    --destructive: 0 55% 45%;
+    /* softer red */
+    --destructive-foreground: 0 0% 0%;
+    /* #000 */
+    --border: 0 0% 25%;
+    /* lighter border for better visibility */
+    --input: 0 0% 20%;
+    /* lighter input */
+    --ring: 0 0% 55%;
+    /* lighter ring */
+    --hover: 0 0% 22%;
+    /* lighter hover */
+    --radius: 0.5rem;
+    --chart-0: 220 7% 65%;
+    --chart-1: 210 100% 60%;
+    /* #339cff */
+    --chart-2: 180 70% 60%;
+    /* #3ee6e6 */
+    --chart-3: 280 65% 70%;
+    /* #c299ff */
+    --chart-4: 330 75% 70%;
+    /* #ff7ab8 */
+    --chart-5: 150 65% 60%;
+    /* #5cffb2 */
+    --outline: 220 7% 100%;
+    /* #fff */
+    --outline-foreground: 220 7% 100%;
+    /* #fff */
+    --outline-border: 220 7% 30%;
+    /* lighter outline border */
+    --ghost-foreground: 220 7% 85%;
+    /* lighter ghost foreground */
+    --ghost-hover: 220 7% 25%;
+    /* lighter ghost hover */
+    --link: 210 100% 55%;
+    /* slightly lighter link */
+    --link-foreground: 0 0% 100%;
+    /* #fff */
+  }
+
+  /* Code editor syntax highlighting */
+  .token {
+    background: none !important;
+  }
+
+  .token.property {
+    color: hsl(var(--chart-0));
+  }
+
+  .token.string,
+  .token.number {
+    color: hsl(var(--chart-5));
+  }
+
+  .token.boolean,
+  .token.null {
+    color: hsl(var(--chart-2));
+  }
+
+  .token.punctuation,
+  .token.operator,
+  .token.comment {
+    color: hsl(var(--muted-foreground));
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  .nav-link:hover,
+  .system-button:hover,
+  .example-button:hover,
+  .dropdown-menu-item:hover,
+  .menu-item:hover {
+    background-color: hsl(var(--hover)) !important;
+    transition: background 0.2s;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-secondary/50 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/50 rounded-full hover:bg-muted-foreground/70 transition-colors;
+  }
+}
+
+html.light {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+@layer components {
+  /* Red outline for destructive outline buttons */
+  .btn-outline.text-destructive,
+  .btn[variant="outline"].text-destructive,
+  .btn-outline-destructive {
+    border-color: hsl(var(--destructive)) !important;
+    color: hsl(var(--destructive)) !important;
+  }
+
+  .btn-outline.text-destructive:hover,
+  .btn[variant="outline"].text-destructive:hover,
+  .btn-outline-destructive:hover {
+    background-color: hsl(var(--destructive) / 0.1) !important;
+    color: hsl(var(--destructive)) !important;
+    border-color: hsl(var(--destructive)) !important;
+  }
+
+  /* Red outline for ghost destructive buttons on hover */
+  .btn-ghost.text-destructive,
+  .btn[variant="ghost"].text-destructive {
+    color: hsl(var(--destructive)) !important;
+    border: none !important;
+    outline: none !important;
+    background-color: transparent !important;
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+
+  .btn-ghost:hover:not(:disabled),
+  .btn[variant="ghost"]:hover:not(:disabled) {
+    background-color: transparent !important;
+    color: hsl(var(--ghost-foreground)) !important;
+    outline: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .btn-ghost.text-destructive:hover,
+  .btn[variant="ghost"].text-destructive:hover {
+    background-color: transparent !important;
+    color: hsl(var(--destructive)) !important;
+    outline: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .btn,
+  .btn-default,
+  .btn[variant="default"] {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    border: none !important;
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+
+  .btn:hover:not(:disabled),
+  .btn-default:hover:not(:disabled),
+  .btn[variant="default"]:hover:not(:disabled) {
+    background-color: hsl(var(--primary-hover)) !important;
+    color: hsl(var(--primary-hover-foreground)) !important;
+  }
+
+  .btn:disabled,
+  .btn-default:disabled,
+  .btn[variant="default"]:disabled {
+    background-color: hsl(var(--muted)) !important;
+    color: hsl(var(--muted-foreground)) !important;
+    border: none !important;
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background-color: hsl(var(--secondary)) !important;
+    color: hsl(var(--secondary-foreground)) !important;
+    border: none !important;
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: hsl(var(--secondary)) !important;
+    color: hsl(var(--secondary-foreground)) !important;
+    opacity: 0.85;
+  }
+
+  .btn-ghost {
+    background-color: transparent !important;
+    color: hsl(var(--ghost-foreground)) !important;
+    border: none !important;
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+
+  .btn-link {
+    background-color: transparent !important;
+    color: hsl(var(--link)) !important;
+    border: none !important;
+    text-decoration: underline;
+    transition: color 0.2s;
+  }
+
+  .btn-link:hover:not(:disabled) {
+    color: hsl(var(--link-foreground)) !important;
+  }
+
+  .btn-destructive {
+    background-color: hsl(var(--destructive)) !important;
+    color: hsl(var(--destructive-foreground)) !important;
+    border: none !important;
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+
+  .btn-destructive:hover:not(:disabled) {
+    background-color: hsl(var(--destructive)) !important;
+    color: hsl(var(--destructive-foreground)) !important;
+    opacity: 0.85;
+  }
+
+  .btn-outline {
+    background-color: transparent !important;
+    color: hsl(var(--outline-foreground)) !important;
+    border: 1px solid hsl(var(--outline-border)) !important;
+    transition:
+      background 0.2s,
+      color 0.2s,
+      border-color 0.2s;
+  }
+
+  .btn-outline:hover:not(:disabled) {
+    background-color: hsl(var(--hover)) !important;
+    color: hsl(var(--outline-foreground)) !important;
+    border-color: hsl(var(--outline-border)) !important;
+  }
+
+  .btn-success,
+  .btn[variant="success"] {
+    background-color: #ffa500 !important;
+    color: #000 !important;
+    border: none !important;
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+
+  .btn-success:hover:not(:disabled),
+  .btn[variant="success"]:hover:not(:disabled) {
+    background-color: #ffd700 !important;
+    color: #000 !important;
+  }
+
+  .dark .btn-success,
+  .dark .btn[variant="success"] {
+    background-color: #ffa500 !important;
+    color: #000 !important;
+  }
+
+  .dark .btn-success:hover:not(:disabled),
+  .dark .btn[variant="success"]:hover:not(:disabled) {
+    background-color: #ffd700 !important;
+    color: #000 !important;
+  }
+}
+
+/* Unify code editor and textarea focus ring */
+.code-editor textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.code-editor textarea {
+  @apply flex min-h-[60px] w-full rounded-md border-0 bg-transparent px-3 py-2 shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 font-mono text-xs;
+}
+
+.code-editor {
+  @apply rounded-md border border-input bg-transparent;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.code-editor:focus-within {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.switch-on,
+.custom-switch[data-state="checked"] {
+  background-color: #ffa500 !important;
+}
+
+.switch-off,
+.custom-switch {
+  background-color: #e5e7eb !important;
+  /* OFF: #e5e7eb (zinc-200) */
+  transition: background 0.2s;
+}
+
+.switch-thumb,
+.switch-on .switch-thumb,
+.custom-switch-thumb,
+.custom-switch > span,
+.custom-switch .custom-switch-thumb,
+.custom-switch [data-state] > span,
+.custom-switch * {
+  background-color: #fff !important;
+  transition: background 0.2s;
+}
+
+/* Fade-in animation for suggestion buttons */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.thinking-label {
+  animation: thinking-shimmer 1.8s linear infinite;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground) / 0.55),
+    hsl(var(--foreground) / 0.9),
+    hsl(var(--muted-foreground) / 0.55)
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes thinking-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .thinking-label {
+    animation: none;
+    color: hsl(var(--muted-foreground));
+  }
+}
+
+/* Thin scrollbar utilities */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.scrollbar-thumb-rounded::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+}
+
+/* Tool call pending shimmer animation */
+@keyframes shimmer-bar {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.animate-shimmer-bar {
+  animation: shimmer-bar 2.5s ease-in-out infinite;
+}

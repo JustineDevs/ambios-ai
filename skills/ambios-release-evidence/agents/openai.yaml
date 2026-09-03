@@ -1,0 +1,7 @@
+interface:
+  display_name: AmbiOS Release Evidence
+  short_description: Judge production readiness using real evidence
+  default_prompt: >-
+    Use $ambios-release-evidence as a release judge. Re-run the smallest checks
+    that prove each claim, verify live behavior, downgrade unsupported claims,
+    and return a gate-by-gate decision with exact limitations.

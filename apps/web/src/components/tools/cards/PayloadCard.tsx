@@ -1,0 +1,315 @@
+import { ALLOWED_FILE_EXTENSIONS } from "@ambios-ai/shared";
+import { FileBraces, FileBracesCorner, FileJson, Upload } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import JsonSchemaEditor from "@/components/editors/JsonSchemaEditor";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FileChip } from "@/components/ui/file-chip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HelpTooltip } from "@/components/utils/HelpTooltip";
+import { useResizable } from "@/hooks/use-resizable";
+import { formatBytes, isAllowedFileType, MAX_TOTAL_FILE_SIZE_TOOLS } from "@/lib/file-utils";
+import type { buildCategorizedSources } from "@/lib/templating-utils";
+import { JsonEditor } from "../../editors/JsonEditor";
+import { useToolConfig } from "../context";
+
+export interface PayloadItem {
+  type: "payload";
+  data: { payloadText: string; inputSchema: string | null };
+  stepResult: undefined;
+  transformError: undefined;
+  categorizedSources: ReturnType<typeof buildCategorizedSources>;
+}
+
+interface PayloadSpotlightProps {
+  onFilesUpload?: (files: File[]) => Promise<void>;
+  onFileRemove?: (fileName: string) => void;
+  isProcessingFiles?: boolean;
+  totalFileSize?: number;
+  isPayloadValid?: boolean;
+}
+
+export const PayloadSpotlight = ({
+  onFilesUpload,
+  onFileRemove,
+  isProcessingFiles = false,
+  totalFileSize = 0,
+  isPayloadValid,
+}: PayloadSpotlightProps) => {
+  const { tool, payload, inputSchema, setPayloadText, setInputSchema, markPayloadEdited } =
+    useToolConfig();
+
+  const payloadText = payload.manualPayloadText;
+  const uploadedFiles = payload.uploadedFiles;
+  const [activeTab, setActiveTab] = useState("payload");
+  const [localPayload, setLocalPayload] = useState<string>(payloadText || "");
+  const [localInputSchema, setLocalInputSchema] = useState(inputSchema || null);
+  const [_error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const sharedPayloadResize = useResizable({ minHeight: 200, maxHeight: 400, initialHeight: 260 });
+
+  // Payload persistence is now handled in tool-config-context.tsx
+
+  useEffect(() => {
+    setLocalPayload(payloadText || "");
+  }, [payloadText]);
+
+  useEffect(() => {
+    setLocalInputSchema(inputSchema || null);
+  }, [inputSchema]);
+
+  const handlePayloadChange = (value: string) => {
+    setLocalPayload(value);
+    markPayloadEdited();
+
+    const trimmed = (value || "").trim();
+    if (trimmed === "") {
+      setError(null);
+      setPayloadText(value);
+      return;
+    }
+
+    try {
+      JSON.parse(value);
+      setError(null);
+      setPayloadText(value);
+    } catch {
+      setError("Invalid JSON - will not be saved. Navigating away will revert to last valid JSON.");
+    }
+  };
+
+  const handleSchemaChange = (value: string | null) => {
+    setLocalInputSchema(value);
+    setInputSchema(value);
+  };
+
+  // Extract payload schema from full input schema for display in schema tab
+  const extractPayloadSchemaForDisplay = (fullInputSchema: string | null): any | null => {
+    if (!fullInputSchema || fullInputSchema.trim() === "") {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(fullInputSchema);
+      return parsed?.properties?.payload || parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const invalidFiles = files.filter((f) => !isAllowedFileType(f.name));
+    if (invalidFiles.length > 0) {
+      setError(`Unsupported file types: ${invalidFiles.map((f) => f.name).join(", ")}`);
+      return;
+    }
+
+    if (onFilesUpload) {
+      await onFilesUpload(files);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={ALLOWED_FILE_EXTENSIONS.join(",")}
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="h-9 rounded-md p-1">
+          <TabsTrigger
+            value="payload"
+            className="flex h-full items-center gap-1 rounded-sm px-3 text-xs data-[state=active]:rounded-sm"
+          >
+            <FileJson className="h-4 w-4" /> Test Payload
+          </TabsTrigger>
+          {isPayloadValid && (
+            <TabsTrigger
+              value="schema"
+              className="flex h-full items-center gap-1 rounded-sm px-3 text-xs data-[state=active]:rounded-sm"
+            >
+              <FileBracesCorner className="h-4 w-4" /> Input Schema
+            </TabsTrigger>
+          )}
+          {!isPayloadValid && (
+            <TabsTrigger
+              value="schema"
+              className="flex h-full items-center gap-1 rounded-sm px-3 text-xs data-[state=active]:rounded-sm"
+            >
+              <FileBraces color="#FFA500" className="h-4 w-4" /> Input Schema
+            </TabsTrigger>
+          )}
+        </TabsList>
+        <TabsContent value="payload" className="mt-3 space-y-3">
+          <span className="block text-muted-foreground text-xs">
+            Enter your inputs here manually, or upload files to autofill missing JSON fields.
+          </span>
+          {onFilesUpload && uploadedFiles.length > 0 && (
+            <div className="space-y-1.5">
+              {uploadedFiles.map((file) => (
+                <FileChip
+                  key={file.key}
+                  file={file}
+                  onRemove={onFileRemove}
+                  size="default"
+                  rounded="md"
+                  showOriginalName={true}
+                  showKey={true}
+                />
+              ))}
+            </div>
+          )}
+          {uploadedFiles.length > 0 ? (
+            <div className="flex gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="font-medium text-muted-foreground text-xs">Manual Payload</span>
+                  <HelpTooltip text="Edit your manual JSON input here. This will be merged with file data." />
+                </div>
+                <JsonEditor
+                  value={localPayload}
+                  onChange={(val) => handlePayloadChange(val || "")}
+                  readOnly={false}
+                  minHeight="200px"
+                  maxHeight="400px"
+                  height={sharedPayloadResize.height}
+                  resizeHandleProps={sharedPayloadResize.resizeHandleProps}
+                  resizable={false}
+                  showValidation={true}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    Merged Payload (Read-only)
+                  </span>
+                  <HelpTooltip text="This is the final payload that will be sent when the tool executes, combining your manual input with parsed file data." />
+                </div>
+                <JsonEditor
+                  value={JSON.stringify(payload.computedPayload, null, 2)}
+                  readOnly={true}
+                  minHeight="200px"
+                  maxHeight="400px"
+                  height={sharedPayloadResize.height}
+                  resizeHandleProps={sharedPayloadResize.resizeHandleProps}
+                  resizable={false}
+                  showValidation={false}
+                />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <JsonEditor
+                value={localPayload}
+                onChange={(val) => handlePayloadChange(val || "")}
+                readOnly={false}
+                maxHeight="400px"
+                resizable={true}
+                showValidation={true}
+              />
+            </div>
+          )}
+          {onFilesUpload && (
+            <div className="space-y-3 border-border/50 border-t pt-3">
+              <div className="flex flex-col items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessingFiles || totalFileSize >= MAX_TOTAL_FILE_SIZE_TOOLS}
+                  className="h-9 px-4"
+                >
+                  {isProcessingFiles ? (
+                    <>
+                      <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      Processing Files...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-3.5 w-3.5" />
+                      Upload Files
+                    </>
+                  )}
+                </Button>
+                <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                  <span>
+                    {formatBytes(totalFileSize)} / {formatBytes(MAX_TOTAL_FILE_SIZE_TOOLS)}
+                  </span>
+                  <HelpTooltip text="Upload CSV, JSON, XML, or Excel files. Files will be automatically parsed to JSON and merged with the manual payload when the tool executes." />
+                </div>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="schema" className="mt-3">
+          <JsonSchemaEditor
+            value={
+              localInputSchema
+                ? JSON.stringify(extractPayloadSchemaForDisplay(localInputSchema), null, 2)
+                : localInputSchema
+            }
+            onChange={(value) => {
+              if (value && value.trim() !== "") {
+                try {
+                  JSON.parse(value);
+                  handleSchemaChange(value);
+                } catch (_e) {
+                  handleSchemaChange(value);
+                }
+              } else {
+                handleSchemaChange(value);
+              }
+            }}
+            isOptional={true}
+            showModeToggle={true}
+          />
+          <div className="mt-2 text-[10px] text-muted-foreground">
+            <HelpTooltip text="Input Schema is optional documentation/validation describing expected payload shape. The payload JSON is what runs; schema does not inject credentials nor drive payload. Leave disabled if not needed." />
+          </div>
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+};
+
+interface PayloadMiniStepCardProps {
+  onFilesUpload?: (files: File[]) => Promise<void>;
+  onFileRemove?: (key: string) => void;
+  isProcessingFiles?: boolean;
+  totalFileSize?: number;
+  isPayloadValid?: boolean;
+}
+
+export const PayloadMiniStepCard = React.memo(
+  ({
+    onFilesUpload,
+    onFileRemove,
+    isProcessingFiles,
+    totalFileSize,
+    isPayloadValid,
+  }: PayloadMiniStepCardProps) => {
+    return (
+      <Card className="mx-auto w-full max-w-6xl overflow-hidden border border-border/50 bg-gradient-to-br from-muted/30 to-muted/10 shadow-md backdrop-blur-sm dark:border-border/70 dark:from-muted/40 dark:to-muted/20">
+        <div className="p-3">
+          <PayloadSpotlight
+            onFilesUpload={onFilesUpload}
+            onFileRemove={onFileRemove}
+            isProcessingFiles={isProcessingFiles}
+            totalFileSize={totalFileSize}
+            isPayloadValid={isPayloadValid}
+          />
+        </div>
+      </Card>
+    );
+  },
+);

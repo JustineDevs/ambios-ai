@@ -1,42 +1,45 @@
 ---
+
+> Canonical deployment (2026-09-03): Next.js is hosted on Vercel. Cloudflare hosts only the Hono Core API and Connector/Execution Workers. This historical draft is not deployment authority; use `ARCHITECTURE.md` and `docs/RELEASE-EVIDENCE.md` for current operations.
 title: AmbiOS AI – WebMCP Agent-Native Platform
 description: AmbiOS is a WebMCP-powered operating layer for the open web where humans and AI agents co-operate on services, incidents, docs, budgets, and integrations.
 author: @JustineDevs
-website-to: https://ambios-ai.pages.dev
+website-to: https://ambios-ai.vercel.app
 status: Proposed
 type: Implementation
 category: Platform
 created: 2026-08-30
 requires tech stack:
-  - Cloudflare Workers + Pages
+  - Vercel (Next.js frontend) + Cloudflare Workers (backend)
   - Cloudflare D1, KV, R2, Queues
   - Supabase (Auth, Postgres, Realtime, Storage)
   - Nango.dev (unified SaaS integrations)
   - Next.js (App Router), TypeScript, React
-  - Tailwind CSS, shadcn/ui (Nova, Lucide, Geist)
+  - Tailwind CSS, shadcn-ai/ui (Nova, Lucide, Geist)
   - OpenAI Agents SDK
   - tRPC (API), Drizzle ORM
-  - Upstash Rate Limit
   - Sentry (observability)
   - Resend (email)
   - Xendit (payments)
   - Uppy (file upload)
   - evlog (logging)
-  - Payload CMS
   - next-intl (i18n)
   - Zustand (state), React Hook Form, Zod (validation)
   - Vitest, Playwright, MSW, Storybook (testing)
   - Framer Motion (animation)
   - Biome, Husky, Knip, Gitleaks, Turborepo (DX)
-  - Kong (API gateway)
-  - GitHub Actions (CI/CD)
+  - GitHub Actions (CI-ai/CD)
   - SWR, Axios (data fetching)
   - OpenAI Agents SDK, Skills, Ruler (AI tooling)
 ---
 
+## Current canonical status
+
+This document is retained as a historical proposal. Its superseded deployment claims and optional stack list are not implementation authority. Current authority is [ARCHITECTURE.md](../ARCHITECTURE.md), [FEATURE-STATUS.md](FEATURE-STATUS.md), and [RELEASE-EVIDENCE.md](RELEASE-EVIDENCE.md): `apps/web` runs on Vercel, while `src/worker.ts` and `src/connector-worker.ts` run as separate Hono Workers.
+
 ## Abstract
 
-AmbiOS AI is a WebMCP-native platform that exposes structured tools (`ambios.*`) for humans and AI agents to collaboratively operate real systems: services, incidents, documentation, budgets, and external SaaS. The MVP demonstrates safe change management and incident response via a context-aware hot-fix flow under declarative guardrails, with all actions logged in a shared Agent Activity Console. The platform runs on Cloudflare Workers + Pages, Supabase, Nango, and Next.js, and is designed to extend into privacy, evidence work, accessibility, contract negotiation, research, learning, and debugging.
+AmbiOS AI is a WebMCP-native platform that exposes structured tools (`ambios.*`) for humans and AI agents to collaboratively operate real systems: services, incidents, documentation, budgets, and external SaaS. The MVP demonstrates safe change management and incident response via a context-aware hot-fix flow under declarative guardrails, with all actions logged in a shared Agent Activity Console. The platform runs on Vercel Next.js plus Hono Cloudflare Workers, Supabase, and Nango, and is designed to extend into privacy, evidence work, accessibility, contract negotiation, research, learning, and debugging.
 
 ## Specification
 
@@ -44,11 +47,11 @@ AmbiOS AI is a WebMCP-native platform that exposes structured tools (`ambios.*`)
 
 AmbiOS consists of:
 
-- **Frontend:** Next.js (App Router) hosted on Cloudflare Pages (`https://ambios-ai.pages.dev`), registering WebMCP tools via `navigator.modelContext`.
-- **API:** tRPC-based API routes (self-managed backend) running on Cloudflare Workers or Node, depending on deployment configuration.
+- **Frontend:** Next.js (App Router) hosted on Vercel (`https://ambios-ai.vercel.app`), registering WebMCP tools via `navigator.modelContext` when the compatible browser runtime is available.
+- **Backend API:** Hono Core and Connector/Execution Workers; shared tRPC contracts remain compatibility types, not a separate runtime.
 - **Data:**
   - **D1:** Core operational data (organizations, agents, tools, actions, incidents, docs, budgets, spend_log, integrations, sync_jobs).
-  - **Supabase Postgres:** User/org metadata (optional, can be unified with D1).
+  - **Supabase Postgres:** User-ai/org metadata (optional, can be unified with D1).
 - **Storage & Infra:**
   - **KV:** Cache, feature flags, rate limit state, context snapshots.
   - **R2:** Object storage (doc attachments, audit exports, seed datasets).
@@ -59,18 +62,18 @@ AmbiOS consists of:
 
 ### WebMCP Tool Surface
 
-The frontend registers tools under the `ambios.*` namespace. MVP tools include:
+The frontend registers tools under the `ambios.*` namespace. The current browser surface mounts only the verified read-only tools; the full contract registry is not equivalent to mounted or live provider capability. MVP target tools include:
 
 - `ambios.identity.get_current_user` – Get the current authenticated user.
 - `ambios.workspace.get_current_context` – Get the current workspace context (org, service, incident).
 - `ambios.workspace.set_context` – Set the current workspace context.
-- `ambios.console.list_agent_actions` – List recent agent/human actions with filters.
+- `ambios.console.list_agent_actions` – List recent agent-ai/human actions with filters.
 - `ambios.incident.get_incident_context` – Get context for an incident (service, recent deploys, related incidents).
 - `ambios.incident.suggest_hotfixes` – Suggest hot-fixes for an incident (rollback, config toggle, feature flag).
 - `ambios.incident.apply_hotfix` – Apply a hot-fix to an incident (with human approval if required).
 - `ambios.guardrails.evaluate_guardrails` – Evaluate guardrails for a planned action (risk score, required approvals).
 - `ambios.payments.check_budget` – Check budget for an agent and action (estimated cost impact).
-- `ambios.backend.deploy_service` – Deploy a service version (mocked or real via Cloudflare/Vercel integration).
+- `ambios.backend.deploy_service` – Deploy a service version (mocked or real via Cloudflare-ai/Vercel integration).
 - `ambios.docs.get_doc` – Get a service doc by ID.
 - `ambios.docs.propose_doc_update` – Propose an update to a doc (agent-driven, human-approved).
 
@@ -119,22 +122,23 @@ Key tables (simplified):
 #### Agent Activity Console
 
 - All actions (human and agent) are logged in `actions`.
-- Console page (`/console`) shows:
+- Console page (`-ai/console`) shows:
   - Timeline of actions.
   - Filters by agent, tool, status.
-  - Detail view with input/output, errors, related resources.
+  - Detail view with input-ai/output, errors, related resources.
 
 #### Plugin Configuration & Sync
 
 - Admin connects SaaS via Nango (e.g., Notion, Cloudflare).
 - AmbiOS stores `integrations` and `sync_jobs` in D1.
 - Sync jobs run via Queues; results update D1 tables (docs, products, etc.).
-- UI (`/plugins`) shows connections, sync status, and allows manual trigger.
+- UI (`-ai/plugins`) shows connections, sync status, and allows manual trigger.
 
 ### Deployment
 
-- **Frontend:** `https://ambios-ai.pages.dev` (Cloudflare Pages).
-- **API:** `https://api.ambios-ai.pages.dev/v1` (Cloudflare Workers or Node, depending on config).
+- **Frontend:** `https://ambios-ai.vercel.app` (Vercel Next.js).
+- **Core API:** `https://ambios-ai.pcg0255.workers.dev/api` (Hono Core Worker).
+- **Connector API:** `https://ambios-ai-connector.pcg0255.workers.dev` (Hono Connector/Execution Worker).
 - **WebMCP:** Tools registered in the browser; accessible in ChatGPT's in-app browser or Chrome with WebMCP enabled.
 
 ## Rationale
@@ -142,7 +146,7 @@ Key tables (simplified):
 AmbiOS is motivated by the need for a standard, agent-native layer on the open web where humans and AI agents can safely co-operate on real systems. Current tools are either:
 
 - Human-only dashboards (no agent integration).
-- Ad-hoc bots/scripts with no standard tool surface, audit, or safety.
+- Ad-hoc bots-ai/scripts with no standard tool surface, audit, or safety.
 - Platform-specific agent frameworks that don't interoperate across services.
 
 AmbiOS addresses this by:
@@ -166,11 +170,11 @@ Security, auditability, and extensibility are core to the design, enabling AmbiO
 - **Authorization:** Policies and guardrails enforce what agents (and humans) can do, per org and role.
 - **Audit:** Every action (human or agent) is logged in `actions` with inputs, outputs, and status. Exportable audit reports are planned.
 - **Data Protection:** Sensitive data (PII, credentials) is minimized in D1; secrets are managed via environment variables and Cloudflare Secrets.
-- **Rate Limiting:** Upstash Rate Limit (or KV-based) prevents abuse of API endpoints.
+- **Rate Limiting:** Cloudflare KV prevents abuse of API endpoints.
 - **Input Validation:** All tool inputs are validated via Zod schemas before execution.
 - **Guardrails:** Risky actions (deploys, hot-fixes, spend) require human approval based on policy.
 - **Integration Security:** Nango handles OAuth for SaaS; AmbiOS stores only connection IDs, not credentials.
 
 ## Copyright
 
-Copyright and related rights waived via [MIT](../LICENSE.md).
+Copyright and related rights waived via [MIT](..-ai/LICENSE.md).

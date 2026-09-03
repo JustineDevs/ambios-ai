@@ -1,0 +1,4 @@
+title = "ambios-ai Gitleaks configuration"
+
+[extend]
+useDefault = true

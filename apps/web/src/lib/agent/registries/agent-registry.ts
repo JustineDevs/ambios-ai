@@ -1,0 +1,52 @@
+import {
+  generateAccessRulesSystemPrompt,
+  generateMainAgentSystemPrompt,
+  generatePlaygroundSystemPrompt,
+  generateSystemPlaygroundSystemPrompt,
+} from "../agent-context";
+import { AgentType } from "../agent-kind";
+import type { AgentDefinition } from "../agent-types";
+import {
+  ACCESS_RULES_TOOL_SET,
+  AGENT_TOOL_SET,
+  SYSTEM_PLAYGROUND_TOOL_SET,
+  TOOL_PLAYGROUND_TOOL_SET,
+} from "./tool-sets";
+
+export { AgentType } from "../agent-kind";
+
+export const AGENT_REGISTRY: Record<AgentType, AgentDefinition> = {
+  [AgentType.MAIN]: {
+    id: AgentType.MAIN,
+    toolSet: AGENT_TOOL_SET,
+    systemPromptGenerator: generateMainAgentSystemPrompt,
+  },
+  [AgentType.PLAYGROUND]: {
+    id: AgentType.PLAYGROUND,
+    toolSet: TOOL_PLAYGROUND_TOOL_SET,
+    preloadedSkills: ["tool-editing"],
+    systemPromptGenerator: generatePlaygroundSystemPrompt,
+  },
+  [AgentType.SYSTEM_PLAYGROUND]: {
+    id: AgentType.SYSTEM_PLAYGROUND,
+    toolSet: SYSTEM_PLAYGROUND_TOOL_SET,
+    preloadedSkills: ["systems-handling"],
+    systemPromptGenerator: generateSystemPlaygroundSystemPrompt,
+  },
+  [AgentType.ACCESS_RULES]: {
+    id: AgentType.ACCESS_RULES,
+    toolSet: ACCESS_RULES_TOOL_SET,
+    preloadedSkills: ["access-rules"],
+    systemPromptGenerator: generateAccessRulesSystemPrompt,
+  },
+};
+
+export function getAgent(agentId: AgentType): AgentDefinition {
+  const agent = AGENT_REGISTRY[agentId];
+  if (!agent) {
+    throw new Error(
+      `Unknown agent: ${agentId}. Available agents: ${Object.values(AgentType).join(", ")}`,
+    );
+  }
+  return agent;
+}

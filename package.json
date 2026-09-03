@@ -1,0 +1,78 @@
+{
+  "name": "ambios-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AmbiOS AI — human-and-agent collaboration for safer operations.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter @ambios-ai/shared build && pnpm --filter web build && pnpm check-worker",
+    "check-types": "pnpm --filter @ambios-ai/shared build && pnpm --filter web check-types && pnpm check-worker",
+    "check-worker": "tsc -p tsconfig.worker.json --noEmit",
+    "lint": "biome check apps/web/src scripts/deploy-hono.mjs scripts/check-cloudflare-budgets.mjs scripts/production-gate.mjs scripts/cloudflare-preflight.mjs src webmcp/register.ts webmcp/evals packages/api packages/config packages/db packages/env packages/infra packages/workflows/src tests",
+    "dev:web": "AUTH_DISABLE=false NEXT_PUBLIC_AUTH_DISABLE=false pnpm --filter web dev",
+    "web:dev": "AUTH_DISABLE=true NEXT_PUBLIC_AUTH_DISABLE=true ENVIRONMENT=development pnpm --filter web dev",
+    "dev:core": "node scripts/dev-core.mjs",
+    "dev:connector": "pnpm exec wrangler dev --config wrangler.connector.toml --local --ip 127.0.0.1 --port 8788 --var ENVIRONMENT:development --var AUTH_DISABLE:true",
+    "preview:web": "pnpm --filter web start",
+    "deploy:cloudflare": "node scripts/deploy-hono.mjs",
+    "deploy:core": "pnpm exec wrangler deploy --config wrangler.toml",
+    "deploy:connector": "pnpm exec wrangler deploy --config wrangler.connector.toml",
+    "cloudflare:preflight": "node scripts/cloudflare-preflight.mjs",
+    "cloudflare:check-budgets": "node scripts/check-cloudflare-budgets.mjs",
+    "cloudflare:analyze": "pnpm cloudflare:check-budgets",
+    "cloudflare:build": "pnpm check-worker",
+    "production:gate": "node scripts/production-gate.mjs",
+    "db:migrate": "pnpm --filter @ambios-ai/db db:migrate",
+    "db:seed": "pnpm --filter @ambios-ai/db db:seed",
+    "webmcp:verify": "node --experimental-strip-types tests/webmcp-verification.ts",
+    "webmcp:evals": "node --experimental-strip-types tests/webmcp-evals.ts",
+    "webmcp:browser-verify": "node tests/webmcp-browser-verification.mjs",
+    "frontend:source-audit": "node scripts/audit-frontend-source.mjs",
+    "operations:check": "node scripts/check-operation-registry.mjs --registry",
+    "operations:check:strict": "node scripts/check-operation-registry.mjs --registry --strict",
+    "openapi:generate": "pnpm --filter @ambios-ai/shared build && node scripts/generate-openapi.mjs",
+    "openapi:check": "pnpm --filter @ambios-ai/shared build && node scripts/generate-openapi.mjs --check",
+    "smoke:local": "node scripts/smoke-local.mjs",
+    "smoke:interactive": "node --experimental-strip-types tests/smoke/run.ts",
+    "test:sage": "pnpm --filter @ambios-ai/api test -- --run src/sage-governance.test.ts",
+    "test": "pnpm --filter web test && pnpm --filter @ambios-ai/api test && pnpm test:sage && pnpm webmcp:evals && pnpm webmcp:verify",
+    "knip": "knip",
+    "knip:production": "knip --production",
+    "secrets:check-ignore": "node scripts/check-ignored-secrets.mjs",
+    "secrets:scan": "gitleaks git --redact --verbose",
+    "secrets:scan:staged": "gitleaks git --pre-commit --redact --staged --verbose",
+    "check": "biome check --write .",
+    "prepare": "husky",
+    "ruler:apply": "pnpm dlx @intellectronica/ruler@latest apply --local-only"
+  },
+  "dependencies": {
+    "@ambios-ai/env": "workspace:*",
+    "dotenv": "catalog:",
+    "hono": "^4.13.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ambios-ai/config": "workspace:*",
+    "@biomejs/biome": "^2.5.10",
+    "@cloudflare/workers-types": "catalog:",
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "husky": "^9.1.7",
+    "knip": "^6.32.2",
+    "lint-staged": "^17.3.0",
+    "turbo": "2.10.11",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.127.0"
+  },
+  "lint-staged": {
+    "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
+      "biome check --write ."
+    ]
+  },
+  "packageManager": "pnpm@10.17.1"
+}

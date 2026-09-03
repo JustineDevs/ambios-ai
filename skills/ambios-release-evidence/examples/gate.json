@@ -1,0 +1,1 @@
+{"name":"authenticated-workflow","status":"unverified","environment":"production","commit":"unknown","evidence":[],"limitation":{"status":"blocked","reason":"No authorized test identity in this session","affected_capability":"authenticated action execution","safe_behavior":"No external write is attempted","next_step":"Run the workflow with an approved test identity"}}

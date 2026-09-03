@@ -1,0 +1,727 @@
+"use client";
+import {
+  type ExecutionFileEnvelope,
+  generateDefaultFromSchema,
+  isRequestConfig,
+  type System,
+  type Tool,
+  type ToolResult,
+  type ToolStep,
+} from "@ambios-ai/shared";
+import { ArchiveRestore, Check, FileQuestion, Loader2, Play, Square } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useEnvironment } from "@/app/environment-context";
+import { useRightSidebar } from "@/components/sidebar/RightSidebarContext";
+import { useToast } from "@/hooks/use-toast";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import type { UploadedFileInfo } from "@/lib/file-utils";
+import { useSystems } from "@/queries/systems";
+import { useArchiveTool, useTools } from "@/queries/tools";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
+import { Button } from "../ui/button";
+import { EnvironmentToggle } from "../ui/environment-toggle";
+import { ExecutionProvider, ToolConfigProvider, useExecution, useToolConfig } from "./context";
+import { DeployButton } from "./deploy/DeployButton";
+import { ModifyStepConfirmDialog } from "./dialogs/ModifyStepConfirmDialog";
+import { FolderPicker } from "./folders/FolderPicker";
+import { useFileUpload } from "./hooks/use-file-upload";
+import { usePayloadValidation } from "./hooks/use-payload-validation";
+import { useToolData } from "./hooks/use-tool-data";
+import { useToolExecution } from "./hooks/use-tool-execution";
+import { ToolActionsMenu } from "./ToolActionsMenu";
+import { ToolStepGallery } from "./ToolStepGallery";
+
+export interface ToolPlaygroundProps {
+  id?: string;
+  embedded?: boolean;
+  initialTool?: Tool;
+  initialPayload?: string;
+  initialInstruction?: string;
+  systems?: System[];
+  onSave?: (tool: Tool, payload: Record<string, any>) => Promise<void>;
+  onExecute?: (tool: Tool, result: ToolResult) => void;
+  headerActions?: React.ReactNode;
+  hideHeader?: boolean;
+  shouldStopExecution?: boolean;
+  onStopExecution?: () => void;
+  uploadedFiles?: UploadedFileInfo[];
+  filePayloads?: Record<string, ExecutionFileEnvelope>;
+  onFilesUpload?: (files: File[]) => Promise<void>;
+  onFileRemove?: (key: string) => void;
+  isProcessingFiles?: boolean;
+  totalFileSize?: number;
+  onFilesChange?: (
+    files: UploadedFileInfo[],
+    payloads: Record<string, ExecutionFileEnvelope>,
+  ) => void;
+  renderAgentInline?: boolean;
+  initialError?: string;
+}
+
+export interface ToolPlaygroundHandle {
+  executeTool: () => Promise<void>;
+  saveTool: () => Promise<boolean>;
+  getCurrentTool: () => Tool;
+}
+
+function ToolPlaygroundInner({
+  id,
+  embedded = false,
+  initialTool,
+  initialInstruction,
+  onSave,
+  onExecute,
+  headerActions,
+  hideHeader = false,
+  shouldStopExecution: externalShouldStop,
+  onStopExecution,
+  uploadedFiles: parentUploadedFiles,
+  onFilesUpload: parentOnFilesUpload,
+  onFileRemove: parentOnFileRemove,
+  isProcessingFiles: parentIsProcessingFiles,
+  totalFileSize: parentTotalFileSize,
+  onFilesChange: parentOnFilesChange,
+  renderAgentInline = false,
+  initialError,
+  innerRef,
+}: ToolPlaygroundProps & { innerRef: React.ForwardedRef<ToolPlaygroundHandle> }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const { tools } = useTools();
+  const archiveTool = useArchiveTool();
+  const { systems } = useSystems();
+  const { hasMultiEnvSystems } = useEnvironment();
+  const toolConfig = useToolConfig();
+  const execution = useExecution();
+
+  const {
+    tool,
+    steps,
+    payload,
+    setToolId,
+    setInstruction,
+    setOutputTransform,
+    setInputSchema,
+    setOutputSchema,
+    setPayloadText,
+    setFilesAndPayloads: setContextFilesAndPayloads,
+    markPayloadEdited,
+    markCurrentStateAsBaseline,
+    setSteps,
+    setFolder,
+    setIsArchived,
+    hasUnsavedChanges,
+  } = toolConfig;
+
+  const {
+    currentExecutingStepIndex: contextCurrentExecutingStepIndex,
+    currentRunId,
+    isExecutingTransform,
+  } = execution;
+
+  const toolId = tool.id;
+  const folder = tool.folder;
+  const isArchived = tool.isArchived;
+  const {
+    setShowAgent,
+    agentPortalRef,
+    AgentSidebarComponent,
+    setSavedTool,
+    setPlaygroundTool,
+    setOnRestoreDraft,
+  } = useRightSidebar();
+
+  // Get the saved tool from context for diff comparison
+  const savedTool = useMemo(() => {
+    if (!toolId) return null;
+    return tools.find((t) => t.id === toolId) || null;
+  }, [toolId, tools]);
+
+  // Navigation guard for unsaved changes
+  const {
+    showDialog: showUnsavedDialog,
+    confirmNavigation,
+    cancelNavigation,
+  } = useUnsavedChangesGuard({
+    enabled: hasUnsavedChanges && !embedded,
+  });
+
+  useEffect(() => {
+    if (!isArchived && !renderAgentInline && AgentSidebarComponent) {
+      setShowAgent(true);
+    }
+    return () => setShowAgent(false);
+  }, [isArchived, setShowAgent, renderAgentInline, AgentSidebarComponent]);
+
+  const outputTransform = toolConfig.outputTransform;
+  const outputSchema = toolConfig.outputSchema;
+  const inputSchema = toolConfig.inputSchema;
+  const instructions = tool.instruction;
+
+  const extractPayloadSchema = (fullInputSchema: string | null): any | null => {
+    if (!fullInputSchema || fullInputSchema.trim() === "") return null;
+    try {
+      const parsed = JSON.parse(fullInputSchema);
+      if (parsed?.properties?.payload) return parsed.properties.payload;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  // Register saved tool with sidebar for history panel
+  useEffect(() => {
+    if (!embedded && toolId) {
+      const toolFromContext = tools.find((t) => t.id === toolId);
+      setSavedTool(toolFromContext || null);
+    } else {
+      setSavedTool(null);
+    }
+    return () => {
+      setSavedTool(null);
+    };
+  }, [embedded, toolId, tools, setSavedTool]);
+
+  useEffect(() => {
+    if (!embedded && toolId) {
+      setOnRestoreDraft((draft) => {
+        if (!draft) return;
+        setSteps(draft.steps);
+        setInstruction(draft.instruction);
+        setOutputTransform(draft.outputTransform);
+        setInputSchema(draft.inputSchema);
+        setOutputSchema(draft.outputSchema);
+        // Payload is not part of the draft - it's saved separately
+        setTimeout(markCurrentStateAsBaseline, 0);
+      });
+    }
+    return () => {
+      setOnRestoreDraft(undefined);
+    };
+  }, [
+    embedded,
+    toolId,
+    setOnRestoreDraft,
+    setSteps,
+    setInstruction,
+    setOutputTransform,
+    setInputSchema,
+    setOutputSchema,
+    markCurrentStateAsBaseline,
+  ]);
+  const manualPayloadText = payload.manualPayloadText;
+  const hasUserEditedPayload = payload.hasUserEdited;
+  const computedPayload = payload.computedPayload;
+
+  const localFileUpload = useFileUpload({
+    onFilesChange: (files, payloads) => {
+      // Use combined setter for atomic update to prevent mismatched state
+      setContextFilesAndPayloads(files, payloads);
+    },
+    onPayloadTextUpdate: (updater) => setPayloadText(updater(manualPayloadText)),
+    onUserEdit: markPayloadEdited,
+    externalFiles: payload.uploadedFiles,
+    externalPayloads: payload.filePayloads,
+  });
+
+  const totalFileSize = parentTotalFileSize ?? localFileUpload.totalFileSize;
+  const isProcessingFiles = parentIsProcessingFiles ?? localFileUpload.isProcessing;
+
+  const { loading, saving, justSaved, notFound, loadTool, saveTool, setLoading } = useToolData({
+    id,
+    initialTool,
+    initialInstruction,
+    embedded,
+    onSave,
+  });
+
+  const [navigateToFinalSignal, setNavigateToFinalSignal] = useState<number>(0);
+  const [showStepOutputSignal, setShowStepOutputSignal] = useState<number>(0);
+  const [focusStepId, setFocusStepId] = useState<string | null>(null);
+
+  // Check if this tool uses any systems with linked non-prod versions
+  const toolUsesMultiEnvSystems = useMemo(() => {
+    if (!hasMultiEnvSystems) return false;
+    // Get system IDs from steps
+    const toolSystemIds = new Set<string>();
+    for (const step of steps) {
+      if (step.config && isRequestConfig(step.config) && step.config.systemId) {
+        toolSystemIds.add(step.config.systemId);
+      }
+    }
+    return Array.from(toolSystemIds).some((systemId) => {
+      // Check if this system has both dev and prod environments (same ID, different environment)
+      const hasDevEnv = systems.some((s) => s.id === systemId && s.environment === "dev");
+      const hasProdEnv = systems.some((s) => s.id === systemId && s.environment === "prod");
+      return hasDevEnv && hasProdEnv;
+    });
+  }, [steps, systems, hasMultiEnvSystems]);
+
+  type DialogState =
+    | { type: "none" }
+    | { type: "invalidPayload" }
+    | { type: "modifyStepConfirm"; stepIndex: number };
+
+  const [activeDialog, setActiveDialog] = useState<DialogState>({ type: "none" });
+  const modifyStepResolveRef = useRef<((shouldContinue: boolean) => void) | null>(null);
+  const skipModifyConfirmRef = useRef<boolean>(false);
+  const isExecutingStep = contextCurrentExecutingStepIndex;
+  const hasGeneratedDefaultPayloadRef = useRef<boolean>(false);
+
+  const { isValid: isPayloadValid } = usePayloadValidation({
+    computedPayload,
+    inputSchema,
+    hasUserEdited: hasUserEditedPayload,
+  });
+
+  const {
+    executeTool: executeToolFromHook,
+    executeStepByIdx,
+    executeTransform,
+    handleStopExecution,
+    shouldAbortRef,
+  } = useToolExecution(
+    { onExecute, onStopExecution, embedded },
+    { setFocusStepId, setShowStepOutputSignal, setNavigateToFinalSignal },
+  );
+
+  useEffect(() => {
+    const trimmed = manualPayloadText.trim();
+    const isEmptyPayload = trimmed === "" || trimmed === "{}";
+
+    if (
+      !hasUserEditedPayload &&
+      isEmptyPayload &&
+      inputSchema &&
+      !hasGeneratedDefaultPayloadRef.current
+    ) {
+      try {
+        const payloadSchema = extractPayloadSchema(inputSchema);
+        if (payloadSchema) {
+          const defaultJson = generateDefaultFromSchema(payloadSchema);
+          const defaultString = JSON.stringify(defaultJson, null, 2);
+          setPayloadText(defaultString);
+          hasGeneratedDefaultPayloadRef.current = true;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+  }, [inputSchema, manualPayloadText, hasUserEditedPayload, setPayloadText, extractPayloadSchema]);
+
+  const handleFilesUpload = async (files: File[]) => {
+    if (parentOnFilesUpload) return parentOnFilesUpload(files);
+    return localFileUpload.uploadFiles(files);
+  };
+
+  const handleFileRemove = (key: string) => {
+    if (parentOnFileRemove) return parentOnFileRemove(key);
+    return localFileUpload.removeFile(key);
+  };
+
+  const pendingModifyStepIndex =
+    activeDialog.type === "modifyStepConfirm" ? activeDialog.stepIndex : null;
+
+  const handleRunAllSteps = () => {
+    if (!isPayloadValid) {
+      setActiveDialog({ type: "invalidPayload" });
+    } else {
+      executeTool();
+    }
+  };
+
+  const handleBeforeStepExecution = async (stepIndex: number, step: any): Promise<boolean> => {
+    if (shouldAbortRef.current || externalShouldStop) return false;
+
+    if (step.modify === true && !skipModifyConfirmRef.current) {
+      return new Promise((resolve) => {
+        modifyStepResolveRef.current = resolve;
+        setActiveDialog({ type: "modifyStepConfirm", stepIndex });
+      });
+    }
+    return true;
+  };
+
+  const handleModifyStepConfirm = (skipFutureConfirmations: boolean) => {
+    if (skipFutureConfirmations) {
+      skipModifyConfirmRef.current = true;
+    }
+    setActiveDialog({ type: "none" });
+    modifyStepResolveRef.current?.(true);
+    modifyStepResolveRef.current = null;
+  };
+
+  const handleModifyStepCancel = () => {
+    const stepIdx = pendingModifyStepIndex;
+    setActiveDialog({ type: "none" });
+    modifyStepResolveRef.current?.(false);
+    modifyStepResolveRef.current = null;
+    if (stepIdx !== null) {
+      const stepId = steps[stepIdx]?.id;
+      if (stepId) {
+        setFocusStepId(stepId);
+        setShowStepOutputSignal(Date.now());
+      }
+    }
+  };
+
+  const executeTool = async () => {
+    await executeToolFromHook(setLoading, handleBeforeStepExecution);
+  };
+
+  const currentTool = useMemo(
+    (): Tool =>
+      ({
+        id: toolId,
+        steps: steps.map((step: ToolStep) => {
+          // Only request steps need pagination handling, transform steps pass through as-is
+          if (!isRequestConfig(step.config)) {
+            return step;
+          }
+          return step;
+        }),
+        outputSchema: outputSchema?.trim() ? JSON.parse(outputSchema) : null,
+        inputSchema: inputSchema ? JSON.parse(inputSchema) : null,
+        outputTransform,
+        instruction: instructions,
+        folder,
+        createdAt: initialTool?.createdAt,
+        updatedAt: initialTool?.updatedAt,
+      }) as Tool,
+    [toolId, steps, outputSchema, inputSchema, outputTransform, instructions, folder, initialTool],
+  );
+
+  // Register current playground state for draft comparisons
+  useEffect(() => {
+    if (!embedded && toolId) {
+      setPlaygroundTool(currentTool);
+    } else {
+      setPlaygroundTool(null);
+    }
+    return () => {
+      setPlaygroundTool(null);
+    };
+  }, [embedded, toolId, currentTool, setPlaygroundTool]);
+
+  useImperativeHandle(
+    innerRef,
+    () => ({
+      executeTool,
+      saveTool,
+      getCurrentTool: () => currentTool,
+    }),
+    [executeTool, saveTool, currentTool],
+  );
+
+  const handleStepEdit = (stepId: string, updatedStep: any, _isUserInitiated?: boolean) => {
+    setSteps((prevSteps) =>
+      prevSteps.map((step) =>
+        step.id === stepId
+          ? {
+              ...updatedStep,
+              config: updatedStep.config,
+            }
+          : step,
+      ),
+    );
+  };
+
+  const handleExecuteStep = async (idx: number): Promise<void> => {
+    await executeStepByIdx(idx);
+  };
+  const handleExecuteStepWithLimit = async (idx: number, limit: number): Promise<void> => {
+    await executeStepByIdx(idx, { limitIterations: limit });
+  };
+
+  const handleExecuteTransform = async (schemaStr: string, transformStr: string): Promise<void> => {
+    await executeTransform(schemaStr, transformStr);
+  };
+
+  const handleUnarchive = async () => {
+    archiveTool.mutate(
+      { id: toolId, archived: false },
+      {
+        onSuccess: () => setIsArchived(false),
+        onError: (error: any) => {
+          console.error("Error unarchiving tool:", error);
+          toast({
+            title: "Error unarchiving tool",
+            description: error.message || "An unexpected error occurred",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  const toolActionButtons = !embedded ? (
+    <div className="flex items-center gap-1">
+      <FolderPicker value={folder} onChange={(f) => setFolder(f ?? undefined)} />
+      <ToolActionsMenu
+        tool={currentTool}
+        disabled={!toolId.trim()}
+        showLabel
+        onRenamed={(newId) => {
+          setToolId(newId);
+          router.push(`/tools/${encodeURIComponent(newId)}`);
+        }}
+        onDuplicated={(newId) => {
+          router.push(`/tools/${encodeURIComponent(newId)}`);
+        }}
+        onArchived={() => router.push("/tools")}
+        onUnarchived={() => setIsArchived(false)}
+        onRestored={() => toolId && loadTool(toolId)}
+      />
+    </div>
+  ) : null;
+
+  const defaultHeaderActions = (
+    <div className="flex items-center gap-2">
+      {toolUsesMultiEnvSystems && <EnvironmentToggle />}
+      {isArchived ? (
+        <Button variant="glass" onClick={handleUnarchive} className="h-9 rounded-xl px-4">
+          <ArchiveRestore className="h-4 w-4" />
+          Unarchive
+        </Button>
+      ) : (
+        <>
+          {loading ? (
+            <Button
+              variant="glass"
+              onClick={handleStopExecution}
+              disabled={saving}
+              className="h-9 rounded-xl px-4"
+            >
+              <Square className="h-4 w-4" />
+              Stop Execution
+            </Button>
+          ) : (
+            <Button
+              variant="glass"
+              onClick={handleRunAllSteps}
+              disabled={
+                loading || saving || isExecutingStep != null || isExecutingTransform || isArchived
+              }
+              className="h-9 rounded-xl px-4"
+            >
+              <Play className="h-4 w-4" />
+              Run All Steps
+            </Button>
+          )}
+          {!embedded && toolId && !isArchived && (
+            <DeployButton
+              tool={currentTool}
+              payload={computedPayload}
+              onBeforeOpen={saveTool}
+              size="default"
+              className="h-9 rounded-xl px-5"
+              disabled={saving || loading}
+            />
+          )}
+          {!isArchived && (
+            <Button
+              variant="glass-primary"
+              onClick={saveTool}
+              disabled={saving || loading}
+              className="h-9 w-[108px] rounded-xl px-5"
+            >
+              {saving ? (
+                "Saving..."
+              ) : justSaved ? (
+                <>
+                  <Check className="mr-1 h-3.5 w-3.5" />
+                  Saved
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      className={
+        embedded
+          ? renderAgentInline
+            ? "flex h-full w-full"
+            : "h-full w-full"
+          : "flex h-screen w-full max-w-none flex-col px-6 pt-2 pb-6"
+      }
+    >
+      {/* Main playground content */}
+      <div className={renderAgentInline ? "flex flex-1 flex-col overflow-hidden" : "contents"}>
+        <div className="mt-4 flex w-full flex-1 overflow-hidden">
+          {/* Main content area */}
+          <div className="h-full flex-1 overflow-hidden">
+            <div className="h-full w-full">
+              <div className="h-full">
+                <div className={embedded ? "h-full" : "h-full"}>
+                  {notFound ? (
+                    <div className="flex items-center justify-center py-20">
+                      <div className="flex flex-col items-center gap-4 text-center">
+                        <FileQuestion className="h-16 w-16 text-muted-foreground" />
+                        <div>
+                          <h2 className="mb-2 font-semibold text-xl">Tool Not Found</h2>
+                          <p className="mb-4 text-muted-foreground">
+                            The tool &quot;{id}&quot; doesn&apos;t exist or has been deleted.
+                          </p>
+                          <Button
+                            variant="glass"
+                            className="rounded-xl"
+                            onClick={() => router.push("/tools")}
+                          >
+                            Back to Tools
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : loading && steps.length === 0 && !instructions ? (
+                    <div className="flex items-center justify-center py-20">
+                      <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="h-8 w-8 animate-spin text-foreground" />
+                        <p className="text-muted-foreground text-sm">Loading tool...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <ToolStepGallery
+                      onStepEdit={handleStepEdit}
+                      onExecuteStep={handleExecuteStep}
+                      onExecuteStepWithLimit={handleExecuteStepWithLimit}
+                      onExecuteTransform={handleExecuteTransform}
+                      onAbort={currentRunId ? handleStopExecution : undefined}
+                      onFilesUpload={handleFilesUpload}
+                      onFileRemove={handleFileRemove}
+                      toolActionButtons={toolActionButtons}
+                      headerActions={
+                        headerActions !== undefined ? headerActions : defaultHeaderActions
+                      }
+                      navigateToFinalSignal={navigateToFinalSignal}
+                      showStepOutputSignal={showStepOutputSignal}
+                      focusStepId={focusStepId}
+                      isProcessingFiles={isProcessingFiles}
+                      totalFileSize={totalFileSize}
+                      isPayloadValid={isPayloadValid}
+                      embedded={embedded}
+                      savedTool={savedTool}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <AlertDialog
+          open={activeDialog.type === "invalidPayload"}
+          onOpenChange={(open) => !open && setActiveDialog({ type: "none" })}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Tool Input Does Not Match Input Schema</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your tool input does not match the input schema. This may cause execution to fail.
+                You can edit the input and schema in the Start (Tool Input) Card.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setActiveDialog({ type: "none" });
+                  executeTool();
+                }}
+              >
+                Run Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {pendingModifyStepIndex !== null && (
+          <ModifyStepConfirmDialog
+            open={activeDialog.type === "modifyStepConfirm"}
+            stepId={steps[pendingModifyStepIndex]?.id}
+            stepName={steps[pendingModifyStepIndex]?.id}
+            onConfirm={handleModifyStepConfirm}
+            onCancel={handleModifyStepCancel}
+          />
+        )}
+
+        {/* Unsaved changes navigation warning dialog */}
+        <AlertDialog open={showUnsavedDialog} onOpenChange={(open) => !open && cancelNavigation()}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved changes to this tool. Are you sure you want to leave? Your changes
+                will be lost.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={cancelNavigation}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmNavigation}>Discard Changes</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Portal agent into sidebar (when not inline) - hideHeader since RightSidebar has tabs */}
+        {!isArchived &&
+          !renderAgentInline &&
+          agentPortalRef &&
+          AgentSidebarComponent &&
+          createPortal(
+            <AgentSidebarComponent className="h-full" hideHeader initialError={initialError} />,
+            agentPortalRef,
+          )}
+      </div>
+
+      {/* Inline agent sidebar */}
+      {!isArchived && renderAgentInline && AgentSidebarComponent && (
+        <div className="h-full w-[420px] flex-shrink-0 overflow-hidden border-border border-l">
+          <AgentSidebarComponent className="h-full" initialError={initialError} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ToolPlayground = forwardRef<ToolPlaygroundHandle, ToolPlaygroundProps>((props, ref) => {
+  const { systems: contextSystems } = useSystems();
+  const systems = props.systems || contextSystems;
+  const _toolId = props.id || props.initialTool?.id;
+
+  return (
+    <ToolConfigProvider
+      initialTool={props.initialTool}
+      initialPayload={props.initialPayload}
+      initialInstruction={props.initialInstruction}
+      systems={systems}
+      externalUploadedFiles={props.uploadedFiles}
+      externalFilePayloads={props.filePayloads}
+      onExternalFilesChange={props.onFilesChange}
+      skipLocalPayloadLoad={false}
+    >
+      <ExecutionProvider>
+        <ToolPlaygroundInner {...props} innerRef={ref} />
+      </ExecutionProvider>
+    </ToolConfigProvider>
+  );
+});
+
+ToolPlayground.displayName = "ToolPlayground";
+export default ToolPlayground;

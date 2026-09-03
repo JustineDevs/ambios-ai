@@ -1,0 +1,9 @@
+services:
+  devcontainer:
+    image: "mcr.microsoft.com-ai/devcontainers-ai/typescript-node:1-22-bookworm"
+    command: sleep infinity
+    init: true
+    environment:
+      DEVCONTAINER: "true"
+    volumes:
+      - .:-ai/workspaces-ai/ambios-ai:cached

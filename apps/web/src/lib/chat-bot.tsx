@@ -1,0 +1,57 @@
+import { createSlackAdapter } from "@chat-adapter/slack";
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { Actions, Button, Card, Chat, Divider, CardText as Text } from "chat";
+
+function requiredEnv(name: string, buildFallback: string) {
+  const value = process.env[name];
+  if (value) return value;
+  if (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build"
+  ) {
+    return buildFallback;
+  }
+  throw new Error(`${name} is required for the Slack Chat SDK adapter.`);
+}
+
+export const chatBot = new Chat({
+  userName: process.env.BOT_USERNAME || "mybot",
+  adapters: {
+    slack: createSlackAdapter({
+      signingSecret: requiredEnv("SLACK_SIGNING_SECRET", "development-signing-secret"),
+    }),
+  },
+  state: createMemoryState(),
+});
+
+chatBot.onNewMention(async (thread) => {
+  await thread.subscribe();
+  await thread.post(
+    Card({
+      title: "Welcome to AmbiOS AI",
+      children: [
+        Text("I am now listening to this Slack thread."),
+        Text("Reply in the thread or click an action below."),
+        Divider(),
+        Actions([
+          Button({ id: "hello", label: "Say Hello", style: "primary" }),
+          Button({ id: "info", label: "Show Info" }),
+        ]),
+      ],
+    }),
+  );
+});
+
+chatBot.onSubscribedMessage(async (thread, message) => {
+  await thread.post(`You said: ${message.text}`);
+});
+
+chatBot.onAction("hello", async (event) => {
+  if (!event.thread) return;
+  await event.thread.post(`Hello, ${event.user.fullName}!`);
+});
+
+chatBot.onAction("info", async (event) => {
+  if (!event.thread) return;
+  await event.thread.post(`Platform: ${event.thread.adapter.name}`);
+});

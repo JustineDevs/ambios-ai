@@ -1,0 +1,465 @@
+"use client";
+
+import type { Message, MessageReference, ToolCall } from "@ambios-ai/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  applyToolMutation,
+  createToolInteractionEntry,
+} from "@/lib/agent/agent-tools/tool-call-state";
+import type { UseAgentMessagesReturn } from "./types";
+
+export function useAgentMessages(
+  stopDrip: () => void,
+  streamDripBufferRef: React.MutableRefObject<string>,
+  initialMessages?: Message[],
+): UseAgentMessagesReturn {
+  const [messages, setMessages] = useState<Message[]>(initialMessages || []);
+  const [isLoading, setIsLoading] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [editingReferences, setEditingReferences] = useState<MessageReference[]>([]);
+  const messagesRef = useRef<Message[]>(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    if (initialMessages && initialMessages.length > 0 && messages.length === 0) {
+      setMessages(initialMessages);
+    }
+  }, [initialMessages, messages.length]);
+
+  const createStreamingAssistantMessage = useCallback(
+    (idOffset = 0): Message => ({
+      id: (Date.now() + idOffset).toString(),
+      content: "",
+      role: "assistant",
+      timestamp: new Date(),
+      tools: [],
+      parts: [{ type: "content", content: "", id: "content-0" }],
+      isStreaming: true,
+    }),
+    [],
+  );
+
+  const updateMessageWithData = useCallback(
+    (msg: Message, data: any, targetMessage: Message): Message => {
+      if (msg.id !== targetMessage.id) return msg;
+
+      switch (data.type) {
+        case "content":
+          return { ...msg, content: msg.content + data.content };
+
+        case "tool_call_start": {
+          const existingToolIndex = msg.tools?.findIndex((t) => t.id === data.toolCall.id);
+          const existingTool =
+            existingToolIndex !== undefined && existingToolIndex >= 0
+              ? msg.tools?.[existingToolIndex]
+              : msg.parts?.find(
+                  (part) => part.type === "tool" && part.tool?.id === data.toolCall.id,
+                )?.tool;
+          const status =
+            data.executionMode === "confirm_before_execution"
+              ? "awaiting_confirmation"
+              : data.toolCall.input
+                ? "running"
+                : "pending";
+
+          const newTool: ToolCall = {
+            id: data.toolCall.id,
+            name: data.toolCall.name,
+            input: data.toolCall.input,
+            status,
+            startTime: new Date(),
+            ...(existingTool?.interactionLog
+              ? { interactionLog: existingTool.interactionLog }
+              : {}),
+            ...(existingTool?.confirmationState !== undefined
+              ? { confirmationState: existingTool.confirmationState }
+              : {}),
+            ...(existingTool?.confirmationData !== undefined
+              ? { confirmationData: existingTool.confirmationData }
+              : {}),
+          };
+
+          let updatedTools: ToolCall[];
+          if (existingToolIndex !== undefined && existingToolIndex >= 0) {
+            updatedTools = [...(msg.tools || [])];
+            updatedTools[existingToolIndex] = newTool;
+          } else {
+            updatedTools = [...(msg.tools || []), newTool];
+          }
+
+          const parts = [...(msg.parts || [])];
+          const existingPartIndex = parts.findIndex(
+            (p) => p.type === "tool" && p.tool?.id === data.toolCall.id,
+          );
+
+          if (existingPartIndex === -1) {
+            if (msg.content) {
+              parts.push({ type: "content", content: msg.content, id: `content-${parts.length}` });
+            }
+            parts.push({ type: "tool", tool: newTool, id: `tool-${data.toolCall.id}` });
+          } else {
+            parts[existingPartIndex] = { ...parts[existingPartIndex], tool: newTool };
+          }
+
+          return { ...msg, tools: updatedTools, parts, content: "" };
+        }
+
+        case "tool_call_update": {
+          const updateTools =
+            msg.tools?.map((tool) => {
+              if (tool.id !== data.toolCall.id) return tool;
+              const updatedTool: ToolCall = {
+                ...tool,
+                logs: [...(tool.logs || []), ...(data.toolCall.logs || [])],
+                status: tool.status === "pending" ? "running" : tool.status,
+              };
+
+              if (tool.name === "build_tool" && data.toolCall.logs) {
+                for (const log of data.toolCall.logs) {
+                  if (log.message.startsWith("TOOL_CALL_UPDATE:build_tool:TOOL_BUILD_SUCCESS:")) {
+                    try {
+                      const logParts = log.message.split(":");
+                      if (logParts.length >= 4) {
+                        updatedTool.buildResult = JSON.parse(logParts.slice(3).join(":"));
+                      }
+                    } catch {}
+                  }
+                }
+              }
+
+              if (tool.name === "edit_tool" && data.toolCall.logs) {
+                for (const log of data.toolCall.logs) {
+                  if (log.message.startsWith("TOOL_CALL_UPDATE:edit_tool:TOOL_FIX_SUCCESS:")) {
+                    try {
+                      const logParts = log.message.split(":");
+                      if (logParts.length >= 4) {
+                        updatedTool.buildResult = JSON.parse(logParts.slice(3).join(":"));
+                      }
+                    } catch {}
+                  }
+                }
+              }
+
+              return updatedTool;
+            }) || [];
+
+          const updateParts =
+            msg.parts?.map((part) =>
+              part.type === "tool" && part.tool?.id === data.toolCall.id
+                ? {
+                    ...part,
+                    tool: {
+                      ...part.tool,
+                      logs: [...(part.tool.logs || []), ...(data.toolCall.logs || [])],
+                      buildResult: updateTools.find((t) => t.id === data.toolCall.id)?.buildResult,
+                      status: part.tool.status === "pending" ? "running" : part.tool.status,
+                    },
+                  }
+                : part,
+            ) || [];
+
+          return { ...msg, tools: updateTools, parts: updateParts };
+        }
+
+        case "tool_call_complete": {
+          const existingTool = msg.tools?.find((t) => t.id === data.toolCall.id);
+
+          const alreadyCompleted =
+            existingTool?.status === "completed" || existingTool?.status === "declined";
+          const hasNewCompletionData =
+            data.toolCall.output !== undefined ||
+            data.toolCall.status !== undefined ||
+            data.toolCall.confirmationState !== undefined ||
+            data.toolCall.confirmationData !== undefined;
+
+          if (alreadyCompleted && !hasNewCompletionData) {
+            return msg;
+          }
+
+          let parsedOutput: any = null;
+          try {
+            parsedOutput =
+              typeof data.toolCall.output === "string"
+                ? JSON.parse(data.toolCall.output)
+                : data.toolCall.output;
+          } catch {}
+
+          const isErrorOutput = parsedOutput?.success === false && parsedOutput?.error;
+          const confirmationState =
+            data.toolCall.confirmationState !== undefined
+              ? data.toolCall.confirmationState
+              : parsedOutput?.confirmationState;
+          const confirmationData =
+            data.toolCall.confirmationData !== undefined
+              ? data.toolCall.confirmationData
+              : parsedOutput?.confirmationData;
+
+          let finalStatus: "completed" | "declined" | "awaiting_confirmation" | "error" =
+            data.toolCall.status || "completed";
+
+          if (isErrorOutput && finalStatus === "completed") {
+            finalStatus = "error";
+          }
+
+          const needsConfirmation = finalStatus === "awaiting_confirmation";
+          const mutation = {
+            status: finalStatus,
+            output: data.toolCall.output,
+            error: isErrorOutput ? parsedOutput.error : null,
+            endTime: needsConfirmation ? undefined : new Date(),
+            ...(confirmationState !== undefined ? { confirmationState } : {}),
+            ...(confirmationData !== undefined ? { confirmationData } : {}),
+          };
+
+          const completedTools =
+            msg.tools?.map((tool) =>
+              tool.id === data.toolCall.id ? applyToolMutation(tool, mutation) : tool,
+            ) || [];
+
+          const updatedParts =
+            msg.parts?.map((part) =>
+              part.type === "tool" && part.tool?.id === data.toolCall.id
+                ? {
+                    ...part,
+                    tool: applyToolMutation(part.tool, mutation),
+                  }
+                : part,
+            ) || [];
+
+          return { ...msg, tools: completedTools, parts: updatedParts };
+        }
+
+        case "done": {
+          if (!msg.isStreaming) return msg;
+          const finalTools =
+            msg.tools?.map((tool) => {
+              if (tool.status === "awaiting_confirmation") return tool;
+              if (tool.status === "running" || tool.status === "pending") {
+                return {
+                  ...tool,
+                  status: "completed" as const,
+                  endTime: tool.endTime || new Date(),
+                };
+              }
+              return tool;
+            }) || [];
+
+          const finalParts = [...(msg.parts || [])];
+          if (msg.content) {
+            const lastPart = finalParts[finalParts.length - 1];
+            if (lastPart?.type === "content") {
+              finalParts[finalParts.length - 1] = {
+                ...lastPart,
+                content: (lastPart.content || "") + msg.content,
+              };
+            } else {
+              finalParts.push({
+                type: "content",
+                content: msg.content,
+                id: `content-${finalParts.length}`,
+              });
+            }
+          }
+
+          const updatedFinalParts = finalParts.map((part) => {
+            if (part.type === "tool" && part.tool) {
+              if (part.tool.status === "awaiting_confirmation") return part;
+              if (part.tool.status === "running" || part.tool.status === "pending") {
+                return {
+                  ...part,
+                  tool: {
+                    ...part.tool,
+                    status: "completed" as const,
+                    endTime: part.tool.endTime || new Date(),
+                  },
+                };
+              }
+            }
+            return part;
+          });
+
+          return {
+            ...msg,
+            isStreaming: false,
+            tools: finalTools,
+            parts: updatedFinalParts,
+            content: "",
+          };
+        }
+
+        case "error": {
+          const errorPart = {
+            type: "error" as const,
+            content: data.content,
+            errorDetails: data.errorDetails,
+            id: `error-${Date.now()}`,
+          };
+          return {
+            ...msg,
+            parts: [...(msg.parts || []), errorPart],
+            isStreaming: false,
+          };
+        }
+
+        default:
+          return msg;
+      }
+    },
+    [],
+  );
+
+  const setAwaitingToolsToDeclined = useCallback(() => {
+    const updateMessages = (msgs: Message[]) => {
+      const interactionEntries = new Map<string, ReturnType<typeof createToolInteractionEntry>>();
+      const getEntry = (toolCallId: string) => {
+        const existing = interactionEntries.get(toolCallId);
+        if (existing) return existing;
+        const created = createToolInteractionEntry("tool_auto_declined_due_to_new_user_message");
+        interactionEntries.set(toolCallId, created);
+        return created;
+      };
+
+      return msgs.map((msg) => ({
+        ...msg,
+        tools: msg.tools?.map((tool) =>
+          tool.status === "awaiting_confirmation"
+            ? applyToolMutation(tool, {
+                status: "declined",
+                output: JSON.stringify({
+                  success: false,
+                  cancelled: true,
+                  message:
+                    "Auto-declined: user sent a new message instead of clicking Confirm/Decline. The proposed changes were NOT applied.",
+                }),
+                endTime: new Date(),
+                interactionEntry: getEntry(tool.id),
+                confirmationState: null,
+                confirmationData: null,
+              })
+            : tool,
+        ),
+        parts: msg.parts?.map((part) =>
+          part.type === "tool" && part.tool?.status === "awaiting_confirmation"
+            ? {
+                ...part,
+                tool: applyToolMutation(part.tool, {
+                  status: "declined",
+                  output: JSON.stringify({
+                    success: false,
+                    cancelled: true,
+                    message:
+                      "Auto-declined: user sent a new message instead of clicking Confirm/Decline. The proposed changes were NOT applied.",
+                  }),
+                  endTime: new Date(),
+                  interactionEntry: getEntry(part.tool.id),
+                  confirmationState: null,
+                  confirmationData: null,
+                }),
+              }
+            : part,
+        ),
+      }));
+    };
+
+    messagesRef.current = updateMessages(messagesRef.current);
+    setMessages(updateMessages);
+  }, []);
+
+  const cleanupInterruptedStream = useCallback(
+    (interruptionMessage: string) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.isStreaming
+            ? {
+                ...msg,
+                isStreaming: false,
+                content: msg.content + interruptionMessage,
+                tools: msg.tools?.map((tool) =>
+                  tool.status === "running" ||
+                  tool.status === "pending" ||
+                  tool.status === "awaiting_confirmation" ||
+                  tool.status === "declined"
+                    ? { ...tool, status: "stopped" as const, endTime: new Date() }
+                    : tool,
+                ),
+                parts: msg.parts?.map((part) =>
+                  part.type === "tool" &&
+                  part.tool &&
+                  (part.tool.status === "running" ||
+                    part.tool.status === "pending" ||
+                    part.tool.status === "awaiting_confirmation" ||
+                    part.tool.status === "declined")
+                    ? {
+                        ...part,
+                        tool: { ...part.tool, status: "stopped" as const, endTime: new Date() },
+                      }
+                    : part,
+                ),
+              }
+            : msg,
+        ),
+      );
+      stopDrip();
+      streamDripBufferRef.current = "";
+    },
+    [stopDrip, streamDripBufferRef],
+  );
+
+  const handleEditMessage = useCallback(
+    (messageId: string, content: string, references?: MessageReference[]) => {
+      setEditingMessageId(messageId);
+      setEditingContent(content);
+      // Seeded from the original message so its mentions survive the edit round trip.
+      setEditingReferences(references ?? []);
+    },
+    [],
+  );
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingContent("");
+    setEditingReferences([]);
+  }, []);
+
+  const findAndResumeMessageWithTool = useCallback((toolCallId: string): Message | null => {
+    const currentMessages = messagesRef.current;
+    const targetMessage = currentMessages.find((msg) =>
+      msg.parts?.some((p) => p.type === "tool" && p.tool?.id === toolCallId),
+    );
+
+    if (!targetMessage) {
+      return null;
+    }
+
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === targetMessage.id ? { ...msg, isStreaming: true } : msg)),
+    );
+
+    return { ...targetMessage, isStreaming: true };
+  }, []);
+
+  return {
+    messages,
+    setMessages,
+    messagesRef,
+    isLoading,
+    setIsLoading,
+    createStreamingAssistantMessage,
+    updateMessageWithData,
+    setAwaitingToolsToDeclined,
+    cleanupInterruptedStream,
+    editingMessageId,
+    setEditingMessageId,
+    editingContent,
+    setEditingContent,
+    editingReferences,
+    setEditingReferences,
+    handleEditMessage,
+    handleCancelEdit,
+    findAndResumeMessageWithTool,
+  };
+}

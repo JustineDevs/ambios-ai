@@ -1,0 +1,869 @@
+"use client";
+
+import type { System } from "@ambios-ai/shared";
+import {
+  detectSystemAuthType,
+  findTemplateForSystem,
+  getSystemAuthStatus,
+} from "@ambios-ai/shared";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useToast } from "@/hooks/use-toast";
+import { useCreateSystem, useSystems, useUpdateSystem } from "@/queries/systems";
+import { useAmbiOSClient } from "@/queries/use-client";
+import type {
+  AuthState,
+  ContextState,
+  OAuthFields,
+  OnboardingState,
+  PhaseCompletion,
+  SectionStatus,
+  SystemConfigContextValue,
+  SystemContextForAgent,
+  SystemDefinition,
+  SystemSection,
+} from "./types";
+
+const DEFAULT_OAUTH_FIELDS: OAuthFields = {
+  client_id: "",
+  client_secret: "",
+  auth_url: "",
+  token_url: "",
+  access_token: "",
+  refresh_token: "",
+  scopes: "",
+  expires_at: "",
+  expires_in: "",
+  token_type: "Bearer",
+  grant_type: "authorization_code",
+  oauth_cert: "",
+  oauth_key: "",
+};
+
+function extractOAuthFields(credentials: Record<string, any>): OAuthFields {
+  return {
+    client_id: credentials.client_id || "",
+    client_secret: credentials.client_secret || "",
+    auth_url: credentials.auth_url || "",
+    token_url: credentials.token_url || "",
+    access_token: credentials.access_token || "",
+    refresh_token: credentials.refresh_token || "",
+    scopes: credentials.scopes || "",
+    expires_at: credentials.expires_at || "",
+    expires_in: credentials.expires_in || "",
+    token_type: credentials.token_type || "Bearer",
+    grant_type: credentials.grant_type || "authorization_code",
+    oauth_cert: credentials.oauth_cert || "",
+    oauth_key: credentials.oauth_key || "",
+  };
+}
+
+function extractNonOAuthCredentials(credentials: Record<string, any>): string {
+  const oauthKeys = [
+    "client_id",
+    "client_secret",
+    "auth_url",
+    "token_url",
+    "access_token",
+    "refresh_token",
+    "scopes",
+    "expires_at",
+    "expires_in",
+    "token_type",
+    "grant_type",
+    "oauth_cert",
+    "oauth_key",
+  ];
+
+  const nonOAuthCreds: Record<string, any> = {};
+  for (const [key, value] of Object.entries(credentials)) {
+    if (!oauthKeys.includes(key)) {
+      nonOAuthCreds[key] = value;
+    }
+  }
+
+  return Object.keys(nonOAuthCreds).length > 0 ? JSON.stringify(nonOAuthCreds, null, 2) : "{}";
+}
+
+function isSystemUsingTemplateOAuth(system: System | undefined): boolean {
+  if (!system?.credentials?.client_id) return false;
+  const match = findTemplateForSystem(system);
+  const templateClientId = match?.template?.oauth?.client_id;
+  return Boolean(templateClientId && system.credentials.client_id === templateClientId);
+}
+
+interface SystemConfigProviderProps {
+  initialSystem?: System;
+  isNew?: boolean;
+  isOnboarding?: boolean;
+  children: ReactNode;
+}
+
+const SystemConfigContext = createContext<SystemConfigContextValue | null>(null);
+
+export function useSystemConfig(): SystemConfigContextValue {
+  const context = useContext(SystemConfigContext);
+  if (!context) {
+    throw new Error("useSystemConfig must be used within a SystemConfigProvider");
+  }
+  return context;
+}
+
+export function SystemConfigProvider({
+  initialSystem,
+  isNew = false,
+  isOnboarding = false,
+  children,
+}: SystemConfigProviderProps) {
+  const { toast } = useToast();
+  const { systems } = useSystems();
+  const createSystemMutation = useCreateSystem();
+  const updateSystemMutation = useUpdateSystem();
+
+  const initialRef = useRef(initialSystem);
+
+  const [systemId, setSystemId] = useState(initialSystem?.id || "");
+  const [systemName, setSystemName] = useState(initialSystem?.name || "");
+  const [url, setUrl] = useState(initialSystem?.url || "");
+  const [templateName, setTemplateName] = useState(initialSystem?.templateName || "");
+  const [icon, setIcon] = useState(initialSystem?.icon || "");
+  const [environment, setEnvironment] = useState<"dev" | "prod" | undefined>(
+    initialSystem?.environment,
+  );
+
+  const initialAuthType = initialSystem
+    ? detectSystemAuthType(initialSystem.credentials || {}, {
+        url: initialSystem.url,
+        templateName: initialSystem.templateName,
+      })
+    : "apikey";
+  const [authType, setAuthType] = useState<"none" | "oauth" | "apikey" | "connection_string">(
+    initialAuthType,
+  );
+  const [credentials, setCredentials] = useState<Record<string, any>>(
+    initialSystem?.credentials || {},
+  );
+  const [oauthFields, setOauthFieldsState] = useState<OAuthFields>(
+    initialSystem?.credentials
+      ? extractOAuthFields(initialSystem.credentials)
+      : DEFAULT_OAUTH_FIELDS,
+  );
+  const [apiKeyCredentials, setApiKeyCredentials] = useState(
+    initialSystem?.credentials
+      ? initialAuthType === "oauth"
+        ? extractNonOAuthCredentials(initialSystem.credentials)
+        : initialAuthType === "connection_string"
+          ? "{}"
+          : JSON.stringify(initialSystem.credentials, null, 2)
+      : "{}",
+  );
+  const [connectionStringCredentials, setConnectionStringCredentials] = useState<
+    Record<string, string>
+  >(() => {
+    if (initialAuthType === "connection_string" && initialSystem?.credentials) {
+      const creds: Record<string, string> = {};
+      for (const [key, value] of Object.entries(initialSystem.credentials)) {
+        if (value !== undefined && value !== null) {
+          creds[key] = String(value);
+        }
+      }
+      return creds;
+    }
+    return {};
+  });
+  // Detect if system was created with ambios OAuth by comparing stored client_id with template's
+  const [useAmbiOSOAuth, setUseAmbiOSOAuth] = useState(() =>
+    isSystemUsingTemplateOAuth(initialSystem),
+  );
+  const [multiTenancyMode, setMultiTenancyMode] = useState<"disabled" | "enabled">(
+    (initialSystem?.multiTenancyMode as "disabled" | "enabled") || "disabled",
+  );
+
+  const [specificInstructions, setSpecificInstructions] = useState(
+    initialSystem?.specificInstructions || "",
+  );
+  const [activeSection, setActiveSection] = useState<SystemSection>("configuration");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, _setIsLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const [isOnboardingActive, setIsOnboardingActive] = useState(isOnboarding);
+
+  const createClient = useAmbiOSClient();
+  const queryClient = useQueryClient();
+  const docFileQueryKey = useMemo(
+    () => ["system-doc-file-count", initialSystem?.id],
+    [initialSystem?.id],
+  );
+  const docFileQuery = useQuery({
+    queryKey: docFileQueryKey,
+    queryFn: async () => {
+      const client = createClient();
+      const result = await client.listSystemFileReferences(initialSystem?.id);
+      return result.files.length;
+    },
+    enabled: !!initialSystem?.id,
+  });
+  const docFileCount = docFileQuery.data ?? 0;
+  const setDocFileCount = useCallback(
+    (count: number) => queryClient.setQueryData(docFileQueryKey, count),
+    [queryClient, docFileQueryKey],
+  );
+
+  useEffect(() => {
+    if (!systemId || isNew) return;
+
+    // Find the system with matching ID AND environment
+    // Use current environment state, not initialRef which can be stale after env-based navigation
+    const updatedSystem = systems.find((s) => s.id === systemId && s.environment === environment);
+    if (!updatedSystem) return;
+
+    const currentUpdatedAt = updatedSystem.updatedAt
+      ? new Date(updatedSystem.updatedAt).getTime()
+      : 0;
+    const initialUpdatedAt = initialRef.current?.updatedAt
+      ? new Date(initialRef.current.updatedAt).getTime()
+      : 0;
+
+    if (currentUpdatedAt > initialUpdatedAt) {
+      setSystemName(updatedSystem.name || "");
+      setUrl(updatedSystem.url || "");
+      setTemplateName(updatedSystem.templateName || "");
+      setIcon(updatedSystem.icon || "");
+      setSpecificInstructions(updatedSystem.specificInstructions || "");
+      setMultiTenancyMode((updatedSystem.multiTenancyMode as "disabled" | "enabled") || "disabled");
+
+      const newAuthType = detectSystemAuthType(updatedSystem.credentials || {}, {
+        url: updatedSystem.url,
+        templateName: updatedSystem.templateName,
+      });
+      setAuthType(newAuthType);
+      setCredentials(updatedSystem.credentials || {});
+      setOauthFieldsState(extractOAuthFields(updatedSystem.credentials || {}));
+      if (newAuthType === "connection_string") {
+        const creds: Record<string, string> = {};
+        for (const [key, value] of Object.entries(updatedSystem.credentials || {})) {
+          if (value !== undefined && value !== null) creds[key] = String(value);
+        }
+        setConnectionStringCredentials(creds);
+        setApiKeyCredentials("{}");
+      } else {
+        setApiKeyCredentials(
+          newAuthType === "oauth"
+            ? extractNonOAuthCredentials(updatedSystem.credentials || {})
+            : JSON.stringify(updatedSystem.credentials || {}, null, 2),
+        );
+      }
+
+      setUseAmbiOSOAuth(isSystemUsingTemplateOAuth(updatedSystem));
+
+      initialRef.current = updatedSystem;
+      setHasUnsavedChanges(false);
+    }
+  }, [systems, systemId, isNew, environment]);
+
+  useEffect(() => {
+    if (!initialSystem) return;
+
+    const hasChanges =
+      systemId !== (initialSystem.id || "") ||
+      systemName !== (initialSystem.name || "") ||
+      url !== (initialSystem.url || "") ||
+      icon !== (initialSystem.icon || "") ||
+      specificInstructions !== (initialSystem.specificInstructions || "") ||
+      authType !==
+        detectSystemAuthType(initialSystem.credentials || {}, {
+          url: initialSystem.url,
+          templateName: initialSystem.templateName,
+        }) ||
+      multiTenancyMode !==
+        ((initialSystem.multiTenancyMode as "disabled" | "enabled") || "disabled");
+
+    setHasUnsavedChanges(hasChanges);
+  }, [
+    systemId,
+    systemName,
+    url,
+    icon,
+    specificInstructions,
+    authType,
+    multiTenancyMode,
+    initialSystem,
+  ]);
+
+  useEffect(() => {
+    if (isNew) {
+      setHasUnsavedChanges(systemId.trim().length > 0 || url.trim().length > 0);
+    }
+  }, [isNew, systemId, url]);
+
+  const setOAuthFields = useCallback((fields: Partial<OAuthFields>) => {
+    setOauthFieldsState((prev) => ({ ...prev, ...fields }));
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const isOAuthConfigured = useMemo(() => {
+    const status = getSystemAuthStatus({
+      credentials: oauthFields,
+      multiTenancyMode,
+    });
+    return status.authType === "oauth" && status.isComplete;
+  }, [oauthFields, multiTenancyMode]);
+
+  const system = useMemo<SystemDefinition>(
+    () => ({
+      id: systemId,
+      name: systemName || undefined,
+      url,
+      templateName: templateName || undefined,
+      icon: icon || undefined,
+      createdAt: initialSystem?.createdAt,
+      updatedAt: initialSystem?.updatedAt,
+      tunnel: initialSystem?.tunnel,
+      environment,
+    }),
+    [systemId, systemName, url, templateName, icon, initialSystem, environment],
+  );
+
+  const auth = useMemo<AuthState>(
+    () => ({
+      authType,
+      credentials,
+      oauthFields,
+      apiKeyCredentials,
+      connectionStringCredentials,
+      isOAuthConfigured,
+      useAmbiOSOAuth,
+      multiTenancyMode,
+    }),
+    [
+      authType,
+      credentials,
+      oauthFields,
+      apiKeyCredentials,
+      connectionStringCredentials,
+      isOAuthConfigured,
+      useAmbiOSOAuth,
+      multiTenancyMode,
+    ],
+  );
+
+  const context = useMemo<ContextState>(
+    () => ({
+      specificInstructions,
+      docFileCount,
+    }),
+    [specificInstructions, docFileCount],
+  );
+
+  const getSectionStatus = useCallback(
+    (section: SystemSection): SectionStatus => {
+      switch (section) {
+        case "configuration": {
+          const hasId = systemId.trim().length > 0;
+          const hasUrl = url.trim().length > 0;
+          return {
+            isComplete: hasId && hasUrl,
+            hasErrors: false,
+            label: hasId && hasUrl ? "Configured" : "Needs endpoint",
+          };
+        }
+        case "authentication":
+          if (authType === "none") {
+            return { isComplete: true, hasErrors: false, label: "No auth" };
+          }
+          if (authType === "oauth") {
+            const status = getSystemAuthStatus({
+              credentials: oauthFields,
+              multiTenancyMode,
+            });
+            return {
+              isComplete: isOAuthConfigured,
+              hasErrors: false,
+              label: status.label,
+            };
+          }
+          if (authType === "connection_string") {
+            const hasHost = Boolean(
+              connectionStringCredentials.host || connectionStringCredentials.hostname,
+            );
+            const hasAuth = Boolean(
+              connectionStringCredentials.username || connectionStringCredentials.password,
+            );
+            const isComplete = hasHost && hasAuth;
+            return {
+              isComplete,
+              hasErrors: false,
+              label: isComplete ? "Connected" : "Connection incomplete",
+            };
+          }
+          try {
+            const parsed = JSON.parse(apiKeyCredentials);
+            const status = getSystemAuthStatus({
+              credentials: parsed,
+              multiTenancyMode,
+            });
+            return {
+              isComplete: status.isComplete,
+              hasErrors: false,
+              label: status.label,
+            };
+          } catch {
+            return { isComplete: false, hasErrors: false, label: "API Key" };
+          }
+        case "context": {
+          const hasInstructions = specificInstructions.trim().length > 0;
+          return {
+            isComplete: docFileCount > 0 || hasInstructions,
+            hasErrors: false,
+            label: `${docFileCount} source${docFileCount !== 1 ? "s" : ""}`,
+          };
+        }
+        default:
+          return { isComplete: false, hasErrors: false, label: "Unknown" };
+      }
+    },
+    [
+      systemId,
+      url,
+      authType,
+      isOAuthConfigured,
+      oauthFields,
+      apiKeyCredentials,
+      connectionStringCredentials,
+      specificInstructions,
+      docFileCount,
+      multiTenancyMode,
+    ],
+  );
+
+  const getSystemContextForAgent = useCallback((): SystemContextForAgent => {
+    let credentialKeys: string[] = [];
+    if (authType === "oauth") {
+      const oauthKeys = Object.entries(oauthFields)
+        .filter(([_, value]) => value !== "")
+        .map(([key]) => key);
+      let additionalKeys: string[] = [];
+      try {
+        const parsed = JSON.parse(apiKeyCredentials || "{}");
+        additionalKeys = Object.keys(parsed);
+      } catch {}
+      credentialKeys = [...new Set([...oauthKeys, ...additionalKeys])];
+    } else if (authType === "connection_string") {
+      credentialKeys = Object.keys(connectionStringCredentials).filter(
+        (k) => connectionStringCredentials[k] !== "",
+      );
+    } else if (authType === "apikey") {
+      try {
+        const parsed = JSON.parse(apiKeyCredentials || "{}");
+        credentialKeys = Object.keys(parsed);
+      } catch {}
+    }
+
+    return {
+      systemId,
+      url,
+      templateName: templateName || undefined,
+      authType,
+      credentialKeys,
+      specificInstructions,
+      isNewSystem: isNew,
+      sectionStatuses: {
+        configuration: getSectionStatus("configuration"),
+        authentication: getSectionStatus("authentication"),
+        context: getSectionStatus("context"),
+      },
+    };
+  }, [
+    systemId,
+    url,
+    templateName,
+    authType,
+    oauthFields,
+    apiKeyCredentials,
+    connectionStringCredentials,
+    specificInstructions,
+    getSectionStatus,
+    isNew,
+  ]);
+
+  const saveSystem = useCallback(
+    async (oauthTokenOverride?: Partial<OAuthFields>): Promise<boolean> => {
+      if (!systemId.trim()) {
+        toast({
+          title: "Error",
+          description: "System ID is required",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (!url.trim()) {
+        toast({
+          title: "Error",
+          description: "API URL is required",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      setIsSaving(true);
+
+      try {
+        let finalCredentials: Record<string, any> = {};
+        const effectiveOAuthFields = oauthTokenOverride
+          ? { ...oauthFields, ...oauthTokenOverride }
+          : oauthFields;
+
+        if (authType === "oauth") {
+          const oauthCredsRaw = Object.fromEntries(
+            Object.entries(effectiveOAuthFields).filter(([_, value]) => value !== ""),
+          );
+          let additionalCreds: Record<string, any> = {};
+          if (
+            apiKeyCredentials &&
+            apiKeyCredentials.trim() !== "" &&
+            apiKeyCredentials.trim() !== "{}"
+          ) {
+            try {
+              additionalCreds = JSON.parse(apiKeyCredentials);
+            } catch {
+              toast({
+                title: "Error",
+                description: "Additional API credentials must be valid JSON",
+                variant: "destructive",
+              });
+              setIsSaving(false);
+              return false;
+            }
+          }
+          finalCredentials = { ...oauthCredsRaw, ...additionalCreds };
+        } else if (authType === "connection_string") {
+          finalCredentials = Object.fromEntries(
+            Object.entries(connectionStringCredentials).filter(([_, v]) => v !== ""),
+          );
+        } else if (authType === "apikey") {
+          try {
+            finalCredentials = JSON.parse(apiKeyCredentials);
+          } catch {
+            toast({
+              title: "Error",
+              description: "Credentials must be valid JSON",
+              variant: "destructive",
+            });
+            setIsSaving(false);
+            return false;
+          }
+        }
+
+        const systemData = {
+          name: systemName.trim() || undefined,
+          url: url.trim(),
+          specificInstructions: specificInstructions.trim(),
+          credentials: finalCredentials,
+          templateName: templateName || undefined,
+          icon: icon.trim() || undefined,
+          multiTenancyMode: multiTenancyMode,
+        };
+
+        const existingSystem = systems.find(
+          (s) => s.id === systemId && s.environment === environment,
+        );
+
+        let savedSystem: System;
+
+        if (existingSystem) {
+          savedSystem = await updateSystemMutation.mutateAsync({
+            id: systemId,
+            input: systemData,
+            options: { environment: existingSystem.environment },
+          });
+        } else {
+          savedSystem = await createSystemMutation.mutateAsync({
+            ...systemData,
+            id: systemId,
+            name: systemData.name || systemId,
+            environment: environment,
+          });
+        }
+
+        setHasUnsavedChanges(false);
+        initialRef.current = savedSystem;
+        return true;
+      } catch (error) {
+        console.error("Error saving system:", error);
+        toast({
+          title: "Error",
+          description: "Failed to save system",
+          variant: "destructive",
+        });
+        return false;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [
+      systemId,
+      systemName,
+      url,
+      icon,
+      specificInstructions,
+      authType,
+      oauthFields,
+      apiKeyCredentials,
+      connectionStringCredentials,
+      templateName,
+      multiTenancyMode,
+      environment,
+      systems,
+      createSystemMutation,
+      updateSystemMutation,
+      toast,
+    ],
+  );
+
+  const resetToInitial = useCallback(() => {
+    const initial = initialRef.current;
+    if (initial) {
+      setSystemId(initial.id || "");
+      setSystemName(initial.name || "");
+      setUrl(initial.url || "");
+      setTemplateName(initial.templateName || "");
+      setIcon(initial.icon || "");
+      setEnvironment(initial.environment);
+      const resetAuthType = detectSystemAuthType(initial.credentials || {}, {
+        url: initial.url,
+        templateName: initial.templateName,
+      });
+      setAuthType(resetAuthType);
+      setCredentials(initial.credentials || {});
+      setOauthFieldsState(extractOAuthFields(initial.credentials || {}));
+      if (resetAuthType === "connection_string") {
+        const creds: Record<string, string> = {};
+        for (const [key, value] of Object.entries(initial.credentials || {})) {
+          if (value !== undefined && value !== null) creds[key] = String(value);
+        }
+        setConnectionStringCredentials(creds);
+        setApiKeyCredentials("{}");
+      } else {
+        setApiKeyCredentials(
+          resetAuthType === "oauth"
+            ? extractNonOAuthCredentials(initial.credentials || {})
+            : JSON.stringify(initial.credentials || {}, null, 2),
+        );
+        setConnectionStringCredentials({});
+      }
+      setSpecificInstructions(initial.specificInstructions || "");
+      setMultiTenancyMode((initial.multiTenancyMode as "disabled" | "enabled") || "disabled");
+    } else {
+      setSystemId("");
+      setSystemName("");
+      setUrl("");
+      setTemplateName("");
+      setIcon("");
+      setEnvironment(undefined);
+      setAuthType("apikey");
+      setCredentials({});
+      setOauthFieldsState(DEFAULT_OAUTH_FIELDS);
+      setApiKeyCredentials("{}");
+      setConnectionStringCredentials({});
+      setSpecificInstructions("");
+      setMultiTenancyMode("disabled");
+    }
+    setHasUnsavedChanges(false);
+  }, []);
+
+  const phaseCompletion = useMemo<PhaseCompletion>(() => {
+    const configComplete = Boolean(systemId.trim() && url.trim());
+
+    let authComplete = false;
+    if (authType === "none") {
+      authComplete = true;
+    } else if (authType === "oauth") {
+      const effectiveGrantType = oauthFields.grant_type || "authorization_code";
+      authComplete =
+        effectiveGrantType === "client_credentials"
+          ? Boolean(oauthFields.access_token)
+          : Boolean(oauthFields.access_token && oauthFields.refresh_token);
+    } else if (authType === "connection_string") {
+      const hasHost = Boolean(
+        connectionStringCredentials.host || connectionStringCredentials.hostname,
+      );
+      const hasAuth = Boolean(
+        connectionStringCredentials.username || connectionStringCredentials.password,
+      );
+      authComplete = hasHost && hasAuth;
+    } else if (authType === "apikey") {
+      try {
+        const parsed = JSON.parse(apiKeyCredentials);
+        authComplete = Object.keys(parsed).length > 0;
+      } catch {
+        authComplete = false;
+      }
+    }
+
+    const contextComplete = Boolean(specificInstructions.trim());
+
+    return {
+      configuration: configComplete,
+      authentication: authComplete,
+      context: contextComplete,
+    };
+  }, [
+    systemId,
+    url,
+    authType,
+    oauthFields.access_token,
+    oauthFields.refresh_token,
+    oauthFields.grant_type,
+    apiKeyCredentials,
+    connectionStringCredentials,
+    specificInstructions,
+  ]);
+
+  const exitOnboarding = useCallback(() => {
+    setIsOnboardingActive(false);
+  }, []);
+
+  const onboarding = useMemo<OnboardingState>(
+    () => ({
+      isOnboarding: isOnboardingActive,
+      phaseCompletion,
+    }),
+    [isOnboardingActive, phaseCompletion],
+  );
+
+  const value = useMemo<SystemConfigContextValue>(
+    () => ({
+      system,
+      auth,
+      context,
+
+      activeSection,
+      isNewSystem: isNew,
+      hasUnsavedChanges,
+      isSaving,
+      isLoading,
+
+      onboarding,
+      exitOnboarding,
+
+      setSystemId: (id) => {
+        setSystemId(id);
+        setHasUnsavedChanges(true);
+      },
+      setSystemName: (name) => {
+        setSystemName(name);
+        setHasUnsavedChanges(true);
+      },
+      setUrl: (url) => {
+        setUrl(url);
+        setHasUnsavedChanges(true);
+      },
+      setTemplateName: (name) => {
+        setTemplateName(name);
+        setHasUnsavedChanges(true);
+      },
+      setIcon: (icon) => {
+        setIcon(icon);
+        setHasUnsavedChanges(true);
+      },
+
+      setAuthType: (type) => {
+        setAuthType(type);
+        setHasUnsavedChanges(true);
+      },
+      setCredentials: (creds) => {
+        setCredentials(creds);
+        setHasUnsavedChanges(true);
+      },
+      setOAuthFields,
+      setApiKeyCredentials: (creds) => {
+        setApiKeyCredentials(creds);
+        setHasUnsavedChanges(true);
+      },
+      setConnectionStringCredentials: (creds) => {
+        setConnectionStringCredentials(creds);
+        setHasUnsavedChanges(true);
+      },
+      setUseAmbiOSOAuth: (use) => {
+        setUseAmbiOSOAuth(use);
+        setHasUnsavedChanges(true);
+      },
+      setMultiTenancyMode: (mode) => {
+        setMultiTenancyMode(mode);
+        setHasUnsavedChanges(true);
+
+        // When enabling multi-tenancy, remove user-specific OAuth tokens
+        // Keep only OAuth setup credentials (template for end users)
+        if (mode === "enabled" && authType === "oauth") {
+          const oauthSetupFields = [
+            "client_id",
+            "client_secret",
+            "auth_url",
+            "token_url",
+            "scopes",
+            "grant_type",
+            "oauth_cert",
+            "oauth_key",
+          ];
+
+          const cleanedOAuthFields: OAuthFields = { ...DEFAULT_OAUTH_FIELDS };
+          oauthSetupFields.forEach((field) => {
+            if (oauthFields[field as keyof OAuthFields]) {
+              (cleanedOAuthFields as any)[field] = oauthFields[field as keyof OAuthFields];
+            }
+          });
+
+          setOAuthFields(cleanedOAuthFields);
+        }
+      },
+
+      setSpecificInstructions: (instructions) => {
+        setSpecificInstructions(instructions);
+        setHasUnsavedChanges(true);
+      },
+
+      setDocFileCount,
+
+      setActiveSection,
+
+      getSectionStatus,
+      getSystemContextForAgent,
+
+      saveSystem,
+      resetToInitial,
+    }),
+    [
+      system,
+      auth,
+      context,
+      activeSection,
+      isNew,
+      hasUnsavedChanges,
+      isSaving,
+      isLoading,
+      onboarding,
+      exitOnboarding,
+      setOAuthFields,
+      getSectionStatus,
+      getSystemContextForAgent,
+      saveSystem,
+      resetToInitial,
+      setDocFileCount,
+      oauthFields,
+      authType,
+    ],
+  );
+
+  return <SystemConfigContext.Provider value={value}>{children}</SystemConfigContext.Provider>;
+}

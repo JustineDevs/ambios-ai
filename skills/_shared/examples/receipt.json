@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "skill": "example-skill",
+  "mode": "standard",
+  "started_at": "2026-01-01T00:00:00Z",
+  "completed_at": "2026-01-01T00:05:00Z",
+  "phases": [
+    {"name": "inventory", "status": "passed", "evidence": ["command: find src -type f"]},
+    {"name": "verify", "status": "passed", "evidence": ["test: pnpm test"]}
+  ],
+  "findings": [],
+  "claims": [],
+  "limitations": []
+}

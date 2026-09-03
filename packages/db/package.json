@@ -1,0 +1,25 @@
+{
+  "name": "@ambios-ai/db",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "db:seed": "node --experimental-strip-types scripts/seed-d1.ts",
+    "db:migrate": "pnpm --filter web exec wrangler --config ../../wrangler.toml d1 migrations apply ambios-core --local"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@ambios-ai/config": "workspace:*",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^6.0.3"
+  }
+}

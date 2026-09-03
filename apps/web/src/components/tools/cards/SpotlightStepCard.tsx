@@ -1,0 +1,948 @@
+import { isTransformConfig, type RequestStepConfig, type ToolStep } from "@ambios-ai/shared";
+import {
+  Bug,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileBraces,
+  FileInput,
+  FileOutput,
+  MessagesSquare,
+  Pencil,
+  Play,
+  RotateCw,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { buildCategorizedSources } from "@/lib/templating-utils";
+import { JavaScriptCodeEditor } from "../../editors/JavaScriptCodeEditor";
+import { TemplateAwareJsonEditor } from "../../editors/TemplateAwareJsonEditor";
+import { TemplateAwareTextEditor } from "../../editors/TemplateAwareTextEditor";
+import { useRightSidebar } from "../../sidebar/RightSidebarContext";
+import { HelpTooltip } from "../../utils/HelpTooltip";
+import { useExecution } from "../context";
+import { CopyButton } from "../shared/CopyButton";
+import { SpotlightTransformStepCard } from "./SpotlightTransformStepCard";
+import { StepInputTab } from "./tabs/StepInputTab";
+import { StepResultTab } from "./tabs/StepResultTab";
+
+export interface StepItem {
+  type: "step";
+  data: ToolStep;
+  stepResult: any;
+  transformError: undefined;
+  categorizedSources: ReturnType<typeof buildCategorizedSources>;
+}
+
+interface SpotlightStepCardProps {
+  step: ToolStep;
+  stepIndex: number;
+  onEdit?: (stepId: string, updatedStep: ToolStep, isUserInitiated?: boolean) => void;
+  onRemove?: () => void;
+  onExecuteStep?: () => Promise<void>;
+  onExecuteStepWithLimit?: (limit: number) => Promise<void>;
+  onAbort?: () => void;
+  isExecuting?: boolean;
+  showOutputSignal?: number;
+  onConfigEditingChange?: (editing: boolean) => void;
+  onDataSelectorChange?: (itemCount: number | null, isInitial: boolean) => void;
+  isFirstStep?: boolean;
+  isPayloadValid?: boolean;
+}
+
+export const SpotlightStepCard = React.memo(
+  ({
+    step,
+    stepIndex,
+    onEdit,
+    onRemove,
+    onExecuteStep,
+    onExecuteStepWithLimit,
+    onAbort,
+    isExecuting,
+    showOutputSignal,
+    onConfigEditingChange,
+    onDataSelectorChange,
+    isFirstStep = false,
+    isPayloadValid = true,
+  }: SpotlightStepCardProps) => {
+    const {
+      isExecutingAny,
+      getStepResult,
+      getStepError,
+      isStepFailed,
+      isStepAborted,
+      canExecuteStep,
+      getDataSelectorResult,
+    } = useExecution();
+    const { sendMessageToAgent } = useRightSidebar();
+
+    const isGlobalExecuting = isExecutingAny;
+    const stepResult = getStepResult(step.id);
+    const stepFailed = isStepFailed(step.id);
+    const stepAborted = isStepAborted(step.id);
+    const canExecute = canExecuteStep(stepIndex);
+
+    const errorResult =
+      (stepFailed || stepAborted) && (!stepResult || typeof stepResult === "string");
+    const showFixButton = errorResult && !stepAborted;
+
+    const { output: dataSelectorOutput, error: dataSelectorError } = getDataSelectorResult(step.id);
+    const loopCount =
+      Array.isArray(dataSelectorOutput) && dataSelectorOutput.length > 0
+        ? dataSelectorOutput.length
+        : null;
+    const isLooping = loopCount !== null;
+    const lastNotifiedStepIdRef = useRef<string | null>(null);
+
+    // Notify parent of data selector changes
+    useEffect(() => {
+      const isInitial = lastNotifiedStepIdRef.current !== step.id;
+      const hasValidOutput = !dataSelectorError && dataSelectorOutput != null;
+      const itemCount =
+        hasValidOutput && Array.isArray(dataSelectorOutput) ? dataSelectorOutput.length : null;
+      onDataSelectorChange?.(itemCount, isInitial);
+      if (isInitial) {
+        lastNotifiedStepIdRef.current = step.id;
+      }
+    }, [dataSelectorOutput, dataSelectorError, step.id, onDataSelectorChange]);
+
+    const [activePanel, setActivePanel] = useState<"input" | "config" | "output">("config");
+    const [showInvalidPayloadDialog, setShowInvalidPayloadDialog] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [pendingAction, setPendingAction] = useState<"execute" | null>(null);
+    const [isEditingInstruction, setIsEditingInstruction] = useState(false);
+    const requestConfig = step.config as RequestStepConfig;
+    const isTransformStep = isTransformConfig(step.config);
+    const stepInstruction = step.instruction;
+    const [instructionEditValue, setInstructionEditValue] = useState(stepInstruction || "");
+    const prevShowOutputSignalRef = useRef<number | undefined>(undefined);
+    const editingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const instructionTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+      return () => {
+        if (editingTimeoutRef.current) clearTimeout(editingTimeoutRef.current);
+      };
+    }, []);
+
+    // === CONFIG TAB STATE (from ToolStepConfigurator) ===
+    const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
+    const [paginationOpen, setPaginationOpen] = useState(false);
+    const [requestOptionsOpen, setRequestOptionsOpen] = useState(false);
+    const [headersText, setHeadersText] = useState("");
+    const [queryParamsText, setQueryParamsText] = useState("");
+
+    const serializeValue = (val: unknown): string => {
+      if (typeof val === "string") return val;
+      if (val !== undefined && val !== null) {
+        try {
+          return JSON.stringify(val, null, 2);
+        } catch {
+          return "{}";
+        }
+      }
+      return "{}";
+    };
+
+    const isEmptyValue = (val: string): boolean => {
+      const trimmed = val.trim();
+      return !trimmed || trimmed === "{}" || trimmed === "[]";
+    };
+
+    useEffect(() => {
+      // Update headers/queryParams for request steps
+      if (!requestConfig) return;
+      const headers = serializeValue(requestConfig?.headers);
+      const queryParams = serializeValue(requestConfig?.queryParams);
+      setHeadersText(headers);
+      setQueryParamsText(queryParams);
+    }, [
+      requestConfig?.headers,
+      requestConfig?.queryParams,
+      requestConfig?.body,
+      serializeValue,
+      requestConfig,
+    ]);
+
+    useEffect(() => {
+      if (
+        showOutputSignal &&
+        showOutputSignal !== prevShowOutputSignalRef.current &&
+        stepResult != null
+      ) {
+        setActivePanel("output");
+      }
+      prevShowOutputSignalRef.current = showOutputSignal;
+    }, [showOutputSignal, stepResult]);
+
+    const handleImmediateEdit = useCallback(
+      (updater: (s: any) => any) => {
+        if (!onEdit) return;
+        const updated = updater(step);
+        if (onConfigEditingChange) {
+          onConfigEditingChange(true);
+          if (editingTimeoutRef.current) clearTimeout(editingTimeoutRef.current);
+          editingTimeoutRef.current = setTimeout(() => onConfigEditingChange(false), 100);
+        }
+        onEdit(step.id, updated, true);
+      },
+      [onEdit, onConfigEditingChange, step],
+    );
+
+    const DEFAULT_PAGINATION_STOP_CONDITION =
+      "(response, pageInfo) => !response.data || response.data.length === 0";
+
+    const handlePaginationTypeChange = (value: string) => {
+      if (value === "none") {
+        handleImmediateEdit((s) => ({
+          ...s,
+          config: { ...s.config, pagination: undefined },
+        }));
+      } else {
+        handleImmediateEdit((s) => {
+          const cfg = s.config as RequestStepConfig;
+          return {
+            ...s,
+            config: {
+              ...s.config,
+              pagination: {
+                type: value,
+                pageSize: cfg.pagination?.pageSize || "50",
+                cursorPath: cfg.pagination?.cursorPath || "",
+                stopCondition: cfg.pagination?.stopCondition || DEFAULT_PAGINATION_STOP_CONDITION,
+              },
+            },
+          };
+        });
+      }
+    };
+
+    const handleEditStepInstruction = useCallback(() => {
+      setInstructionEditValue(stepInstruction || "");
+      setIsEditingInstruction(true);
+      setTimeout(() => {
+        if (instructionTextareaRef.current) {
+          instructionTextareaRef.current.focus();
+          const len = instructionTextareaRef.current.value.length;
+          instructionTextareaRef.current.setSelectionRange(len, len);
+        }
+      }, 0);
+    }, [stepInstruction]);
+
+    const handleSaveInstruction = useCallback(() => {
+      handleImmediateEdit((s) => ({
+        ...s,
+        config: { ...s.config, instruction: instructionEditValue },
+      }));
+      setIsEditingInstruction(false);
+    }, [instructionEditValue, handleImmediateEdit]);
+
+    const handleCancelInstructionEdit = useCallback(() => {
+      setInstructionEditValue(stepInstruction || "");
+      setIsEditingInstruction(false);
+    }, [stepInstruction]);
+
+    const handleInstructionKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        if (e.key === "Escape") {
+          handleCancelInstructionEdit();
+        } else if (e.key === "Enter" && e.metaKey) {
+          handleSaveInstruction();
+        }
+      },
+      [handleCancelInstructionEdit, handleSaveInstruction],
+    );
+
+    const handleRunStepClick = () => {
+      if (isFirstStep && !isPayloadValid) {
+        setPendingAction("execute");
+        setShowInvalidPayloadDialog(true);
+      } else if (onExecuteStep) {
+        onExecuteStep();
+      }
+    };
+
+    const handleFixInChat = useCallback(() => {
+      const stepError = getStepError(step.id);
+      const errorMsg =
+        stepError || (typeof stepResult === "string" ? stepResult : "Step execution failed");
+      const truncatedError = errorMsg.length > 500 ? `${errorMsg.slice(0, 500)}...` : errorMsg;
+      sendMessageToAgent(
+        `Step "${step.id}" failed with the following error:\n\n${truncatedError}\n\nDiagnose the issue and fix the step.`,
+      );
+    }, [step.id, stepResult, getStepError, sendMessageToAgent]);
+
+    return (
+      <Card className="mx-auto w-full max-w-6xl overflow-hidden border border-border/50 bg-gradient-to-br from-muted/30 to-muted/10 shadow-md backdrop-blur-sm dark:border-border/70 dark:from-muted/40 dark:to-muted/20">
+        <div className="p-3">
+          <div className={activePanel === "config" ? "space-y-1" : "space-y-2"}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Tabs
+                  value={activePanel}
+                  onValueChange={(v) => setActivePanel(v as "input" | "config" | "output")}
+                >
+                  <TabsList className="h-9 rounded-md p-1">
+                    <TabsTrigger
+                      value="input"
+                      className="flex h-full items-center gap-1 rounded-sm px-3 text-xs data-[state=active]:rounded-sm"
+                    >
+                      <FileInput className="h-4 w-4" /> Step Input
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="config"
+                      className="flex h-full items-center gap-1 rounded-sm px-3 text-xs data-[state=active]:rounded-sm"
+                    >
+                      <FileBraces className="h-4 w-4" /> Step Config
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="output"
+                      className="flex h-full items-center gap-1 rounded-sm px-3 text-xs data-[state=active]:rounded-sm"
+                    >
+                      <FileOutput className="h-4 w-4" /> Step Result
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {showFixButton && (
+                  <Button
+                    variant="glass-primary"
+                    onClick={handleFixInChat}
+                    className="h-8 gap-2 rounded-xl px-3"
+                  >
+                    <MessagesSquare className="h-3.5 w-3.5" />
+                    <span className="font-medium text-[13px]">Fix in chat</span>
+                  </Button>
+                )}
+                {onExecuteStep && (
+                  <div className="flex items-center">
+                    {isExecuting && onAbort ? (
+                      <Button
+                        variant="glass"
+                        onClick={onAbort}
+                        className="h-8 gap-2 rounded-xl px-3"
+                      >
+                        <Square className="h-3 w-3" />
+                        <span className="font-medium text-[13px]">Stop</span>
+                      </Button>
+                    ) : (
+                      <span
+                        title={
+                          !canExecute
+                            ? "Execute previous steps first"
+                            : isExecuting
+                              ? "Step is executing..."
+                              : "Run this step"
+                        }
+                      >
+                        <div
+                          className={`relative flex rounded-xl border border-input bg-gradient-to-br from-muted/50 to-muted/30 shadow-sm backdrop-blur-sm dark:from-muted/50 dark:to-muted/30 ${isLooping && onExecuteStepWithLimit ? "" : ""}`}
+                        >
+                          <Button
+                            variant="ghost"
+                            onClick={handleRunStepClick}
+                            disabled={!canExecute || isExecuting || isGlobalExecuting}
+                            className={`h-8 gap-2 border-0 pl-3 ${isLooping && onExecuteStepWithLimit ? "rounded-r-none pr-2" : "pr-3"}`}
+                          >
+                            {isLooping ? (
+                              <RotateCw className="h-3.5 w-3.5" />
+                            ) : (
+                              <Play className="h-3 w-3" />
+                            )}
+                            <span className="font-medium text-[13px]">Run Step</span>
+                          </Button>
+                          {isLooping && onExecuteStepWithLimit && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  disabled={!canExecute || isExecuting || isGlobalExecuting}
+                                  className="h-8 rounded-l-none border-0 px-1.5"
+                                >
+                                  <ChevronDown className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => onExecuteStepWithLimit(1)}>
+                                  <Bug className="mr-2 h-3.5 w-3.5" />
+                                  Run single iteration
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                          {isLooping && (
+                            <span className="absolute -top-2 -left-2 flex h-[16px] min-w-[16px] items-center justify-center rounded bg-primary px-1 font-bold text-[10px] text-primary-foreground">
+                              {(loopCount as number) >= 1000
+                                ? `${Math.floor((loopCount as number) / 1000)}k`
+                                : loopCount}
+                            </span>
+                          )}
+                        </div>
+                      </span>
+                    )}
+                  </div>
+                )}
+                {onRemove && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="h-8 w-8"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              {activePanel === "input" && (
+                <StepInputTab step={step} stepIndex={stepIndex} onEdit={onEdit} />
+              )}
+              {activePanel === "config" && (
+                <Card className="w-full border-none opacity-100 shadow-none">
+                  <CardContent className="space-y-3 p-3 text-sm">
+                    <div>
+                      <Label className="flex items-center gap-1 text-xs">Step Instruction</Label>
+                      {isEditingInstruction ? (
+                        <div className="relative mt-1 rounded-lg border bg-muted/30 shadow-sm">
+                          <textarea
+                            ref={instructionTextareaRef}
+                            value={instructionEditValue}
+                            onChange={(e) => setInstructionEditValue(e.target.value)}
+                            onKeyDown={handleInstructionKeyDown}
+                            className="min-h-[72px] w-full resize-y border-0 bg-transparent px-3 py-2 pr-20 font-mono text-xs shadow-none focus:outline-none focus:ring-0"
+                            placeholder="Describe what this step should do..."
+                          />
+                          <div className="absolute top-1 right-1 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={handleSaveInstruction}
+                              className="flex h-6 w-6 items-center justify-center rounded text-green-600 transition-colors hover:bg-green-500/20"
+                              title="Save (⌘+Enter)"
+                            >
+                              <Check className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCancelInstructionEdit}
+                              className="flex h-6 w-6 items-center justify-center rounded text-red-600 transition-colors hover:bg-red-500/20"
+                              title="Cancel (Esc)"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="group relative mt-1 rounded-lg border bg-muted/30 shadow-sm">
+                          <div className="absolute top-0 right-0 bottom-0 z-10 flex items-center gap-1 bg-gradient-to-l from-muted via-muted/90 to-muted/60 pr-1 pl-2 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={handleEditStepInstruction}
+                              className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-muted/50"
+                              title="Edit instruction"
+                              aria-label="Edit instruction"
+                            >
+                              <Pencil className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                            <CopyButton text={stepInstruction || ""} />
+                          </div>
+                          <div className="flex h-9 items-center truncate px-3 pr-16 text-muted-foreground text-xs">
+                            {stepInstruction || (
+                              <span className="text-muted-foreground italic">
+                                Describe what this step should do...
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {isTransformStep ? (
+                      <SpotlightTransformStepCard
+                        step={step}
+                        onImmediateEdit={handleImmediateEdit}
+                      />
+                    ) : (
+                      <>
+                        <div>
+                          <Label className="flex items-center gap-1 text-xs">
+                            Request &amp; URL
+                            <HelpTooltip text="Configure the HTTP method and URL for this request. Use variables like {variable} to reference previous step outputs." />
+                          </Label>
+                          <div className="mt-1 space-y-2">
+                            <div className="flex gap-2">
+                              <div className="flex items-stretch rounded-lg border bg-muted/30 shadow-sm">
+                                <Select
+                                  value={requestConfig?.method}
+                                  onValueChange={(value) =>
+                                    handleImmediateEdit((s) => ({
+                                      ...s,
+                                      config: { ...s.config, method: value },
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger className="h-full min-h-9 w-28 border-0 bg-transparent shadow-none">
+                                    <SelectValue placeholder="Method" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {["GET", "POST", "PUT", "DELETE", "PATCH"].map((method) => (
+                                      <SelectItem key={method} value={method}>
+                                        {method}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <TemplateAwareTextEditor
+                                value={requestConfig?.url || ""}
+                                onChange={(newValue) => {
+                                  handleImmediateEdit((s) => ({
+                                    ...s,
+                                    config: { ...s.config, url: newValue },
+                                  }));
+                                }}
+                                stepId={step.id}
+                                className="flex-1"
+                                placeholder="https://api.example.com/endpoint"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        {(() => {
+                          const showBody = ["POST", "PUT", "PATCH"].includes(
+                            requestConfig?.method || "",
+                          );
+                          const hasHeaders = !isEmptyValue(headersText);
+                          const hasQueryParams = !isEmptyValue(queryParamsText);
+                          const hasBody = showBody && !isEmptyValue(requestConfig?.body || "");
+                          const hasAnyRequestOptions = hasHeaders || hasQueryParams || hasBody;
+
+                          return (
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => setRequestOptionsOpen(!requestOptionsOpen)}
+                                className="flex w-full cursor-pointer items-center justify-between rounded-md p-2 text-left font-medium text-xs transition-colors hover:bg-muted/50"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setRequestOptionsOpen(!requestOptionsOpen);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center gap-1">
+                                  {requestOptionsOpen ? (
+                                    <ChevronDown className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3" />
+                                  )}
+                                  <span>Request Options</span>
+                                  {!requestOptionsOpen && hasAnyRequestOptions && (
+                                    <span className="ml-1 text-[10px] text-muted-foreground">
+                                      (configured)
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                              <div
+                                className={`overflow-hidden transition-all duration-200 ease-in-out ${requestOptionsOpen ? "max-h-[1200px] opacity-100" : "max-h-0 opacity-0"}`}
+                              >
+                                <div className="space-y-3 pt-2 pl-2">
+                                  <div>
+                                    <Label className="mb-1 block text-muted-foreground text-xs">
+                                      Headers
+                                    </Label>
+                                    <TemplateAwareJsonEditor
+                                      value={headersText}
+                                      onChange={(val) => {
+                                        setHeadersText(val || "");
+                                        handleImmediateEdit((s) => ({
+                                          ...s,
+                                          config: { ...s.config, headers: val || "" },
+                                        }));
+                                      }}
+                                      stepId={step.id}
+                                      minHeight="75px"
+                                      maxHeight="300px"
+                                      placeholder="{}"
+                                      showValidation={true}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="mb-1 block text-muted-foreground text-xs">
+                                      Query Parameters
+                                    </Label>
+                                    <TemplateAwareJsonEditor
+                                      value={queryParamsText}
+                                      onChange={(val) => {
+                                        setQueryParamsText(val || "");
+                                        handleImmediateEdit((s) => ({
+                                          ...s,
+                                          config: { ...s.config, queryParams: val || "" },
+                                        }));
+                                      }}
+                                      stepId={step.id}
+                                      minHeight="75px"
+                                      maxHeight="300px"
+                                      placeholder="{}"
+                                      showValidation={true}
+                                    />
+                                  </div>
+                                  {showBody && (
+                                    <div>
+                                      <Label className="mb-1 block text-muted-foreground text-xs">
+                                        Body
+                                      </Label>
+                                      <TemplateAwareJsonEditor
+                                        value={requestConfig?.body || ""}
+                                        onChange={(val) =>
+                                          handleImmediateEdit((s) => ({
+                                            ...s,
+                                            config: { ...s.config, body: val || "" },
+                                          }))
+                                        }
+                                        stepId={step.id}
+                                        minHeight="75px"
+                                        maxHeight="300px"
+                                        placeholder=""
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setPaginationOpen(!paginationOpen)}
+                            className="flex w-full cursor-pointer items-center justify-between rounded-md p-2 text-left font-medium text-xs transition-colors hover:bg-muted/50"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setPaginationOpen(!paginationOpen);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              {paginationOpen ? (
+                                <ChevronDown className="h-3 w-3" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3" />
+                              )}
+                              <span>Pagination</span>
+                              <HelpTooltip text="Configure pagination if the API returns data in pages. Only set this if you're using pagination variables like {'<<offset>>'}, {'<<page>>'}, or {'<<cursor>>'} in your request." />
+                            </div>
+                          </button>
+                          <div
+                            className={`overflow-hidden transition-all duration-200 ease-in-out ${paginationOpen ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"}`}
+                          >
+                            <div className="mt-1 space-y-2 border-muted">
+                              <div className="mb-1 pl-2">
+                                <div className="rounded-lg border bg-muted/30 shadow-sm">
+                                  <Select
+                                    value={requestConfig?.pagination?.type || "none"}
+                                    onValueChange={handlePaginationTypeChange}
+                                  >
+                                    <SelectTrigger className="h-9 border-0 bg-transparent shadow-none">
+                                      <SelectValue placeholder="No pagination" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">No pagination</SelectItem>
+                                      <SelectItem value="offsetBased">
+                                        Offset-based (uses {"<<offset>>"})
+                                      </SelectItem>
+                                      <SelectItem value="pageBased">
+                                        Page-based (uses {"<<page>>"})
+                                      </SelectItem>
+                                      <SelectItem value="cursorBased">
+                                        Cursor-based (uses {"<<cursor>>"})
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              {requestConfig?.pagination && (
+                                <div className="mt-2 gap-2 pl-2">
+                                  <div className="flex gap-2">
+                                    <div className="flex-1">
+                                      <Label className="text-xs">Page Size</Label>
+                                      <div className="mt-1 rounded-lg border bg-muted/30 shadow-sm">
+                                        <Input
+                                          value={requestConfig?.pagination?.pageSize || "50"}
+                                          onChange={(e) =>
+                                            handleImmediateEdit((s) => {
+                                              const cfg = s.config as RequestStepConfig;
+                                              return {
+                                                ...s,
+                                                config: {
+                                                  ...s.config,
+                                                  pagination: {
+                                                    ...(cfg.pagination || {}),
+                                                    pageSize: e.target.value,
+                                                  },
+                                                },
+                                              };
+                                            })
+                                          }
+                                          className="h-9 border-0 bg-transparent text-xs shadow-none focus:ring-0 focus:ring-offset-0"
+                                          placeholder="50"
+                                        />
+                                      </div>
+                                    </div>
+                                    {requestConfig?.pagination?.type === "cursorBased" && (
+                                      <div className="flex-1">
+                                        <Label className="text-xs">Cursor Path</Label>
+                                        <div className="mt-1 rounded-lg border bg-muted/30 shadow-sm">
+                                          <Input
+                                            value={requestConfig?.pagination?.cursorPath || ""}
+                                            onChange={(e) =>
+                                              handleImmediateEdit((s) => {
+                                                const cfg = s.config as RequestStepConfig;
+                                                return {
+                                                  ...s,
+                                                  config: {
+                                                    ...s.config,
+                                                    pagination: {
+                                                      ...(cfg.pagination || {}),
+                                                      cursorPath: e.target.value,
+                                                    },
+                                                  },
+                                                };
+                                              })
+                                            }
+                                            className="h-9 border-0 bg-transparent text-xs shadow-none focus:ring-0 focus:ring-offset-0"
+                                            placeholder="e.g., response.nextCursor"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="mt-2 gap-2">
+                                    <Label className="flex items-center gap-1 text-xs">
+                                      Stop Condition (JavaScript)
+                                      <HelpTooltip text="JavaScript function that returns true when pagination should stop. Receives (response, pageInfo) where pageInfo has: page, offset, cursor, total fetched." />
+                                    </Label>
+                                    <div className="mt-1">
+                                      <JavaScriptCodeEditor
+                                        value={
+                                          requestConfig?.pagination?.stopCondition ||
+                                          DEFAULT_PAGINATION_STOP_CONDITION
+                                        }
+                                        onChange={(val) =>
+                                          handleImmediateEdit((s) => {
+                                            const cfg = s.config as RequestStepConfig;
+                                            return {
+                                              ...s,
+                                              config: {
+                                                ...s.config,
+                                                pagination: {
+                                                  ...(cfg.pagination || {}),
+                                                  stopCondition: val,
+                                                },
+                                              },
+                                            };
+                                          })
+                                        }
+                                        minHeight="50px"
+                                        maxHeight="300px"
+                                        resizable={true}
+                                        isTransformEditor={false}
+                                        autoFormatOnMount={false}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setAdvancedSettingsOpen(!advancedSettingsOpen)}
+                            className="flex w-full cursor-pointer items-center justify-between rounded-md p-2 text-left font-medium text-xs transition-colors hover:bg-muted/50"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setAdvancedSettingsOpen(!advancedSettingsOpen);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              {advancedSettingsOpen ? (
+                                <ChevronDown className="h-3 w-3" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3" />
+                              )}
+                              <span>Advanced Settings</span>
+                            </div>
+                          </button>
+                          <div
+                            className={`overflow-hidden transition-all duration-200 ease-in-out ${advancedSettingsOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}
+                          >
+                            <div className="mt-2 space-y-3 border-muted">
+                              <div className="flex items-center justify-between space-x-2 pl-2">
+                                <div className="flex flex-col gap-1">
+                                  <label
+                                    htmlFor={`modify-${step.id}`}
+                                    className="font-medium text-xs leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                  >
+                                    Modifies data
+                                  </label>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Enable this if the step can modify or delete live data. When
+                                    enabled, you'll be prompted to confirm before execution.
+                                  </p>
+                                </div>
+                                <Switch
+                                  id={`modify-${step.id}`}
+                                  checked={step.modify === true}
+                                  onCheckedChange={(checked) => {
+                                    handleImmediateEdit((s) => ({
+                                      ...s,
+                                      modify: checked === true,
+                                    }));
+                                  }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between space-x-2 pl-2">
+                                <div className="flex flex-col gap-1">
+                                  <label
+                                    htmlFor={`continue-on-failure-${step.id}`}
+                                    className="font-medium text-xs leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                  >
+                                    Continue on failure
+                                  </label>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    When enabled, the workflow continues even if this step fails.
+                                    Failed iterations are tracked in the results but don't stop
+                                    execution. Error detection is automatically disabled when this
+                                    is enabled.
+                                  </p>
+                                </div>
+                                <Switch
+                                  id={`continue-on-failure-${step.id}`}
+                                  checked={step.failureBehavior === "continue"}
+                                  onCheckedChange={(checked) => {
+                                    handleImmediateEdit((s) => ({
+                                      ...s,
+                                      failureBehavior: checked === true ? "continue" : "fail",
+                                    }));
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              {activePanel === "output" && (
+                <StepResultTab
+                  step={step}
+                  stepIndex={stepIndex}
+                  isExecuting={isExecuting}
+                  isActive={true}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <AlertDialog
+          open={showInvalidPayloadDialog}
+          onOpenChange={(open) => {
+            setShowInvalidPayloadDialog(open);
+            if (!open) {
+              setPendingAction(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Tool Input Does Not Match Input Schema</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your tool input does not match the input schema. This may cause execution to fail.
+                You can edit the input and schema in the Start (Tool Input) Card.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setShowInvalidPayloadDialog(false);
+                  if (pendingAction === "execute" && onExecuteStep) {
+                    onExecuteStep();
+                  }
+                  setPendingAction(null);
+                }}
+              >
+                Run Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Step</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete step "{step.id}"? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  onRemove?.();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+    );
+  },
+);

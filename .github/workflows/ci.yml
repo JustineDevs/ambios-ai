@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 10.17.1
+  NODE_VERSION: 20
+
+jobs:
+  quality:
+    name: Quality, contracts, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate canonical operation registry
+        run: pnpm operations:check
+      - name: Reject endpoint drift
+        run: pnpm operations:check:strict
+      - name: Validate OpenAPI parity
+        run: pnpm openapi:check
+      - run: pnpm lint
+      - run: pnpm check-types
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm cloudflare:check-budgets
+      - name: Upload build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-build-${{ github.sha }}
+          path: apps/web/.next/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser-and-smoke:
+    name: Browser and local HTTP smoke
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ambios-ai/api exec playwright install --with-deps chromium
+      - name: Start Worker
+        run: pnpm exec wrangler dev --local --ip 127.0.0.1 > "$RUNNER_TEMP/ambios-worker.log" 2>&1 &
+      - name: Start Connector Worker
+        run: pnpm exec wrangler dev --config wrangler.connector.toml --local --ip 127.0.0.1 --port 8788 > "$RUNNER_TEMP/ambios-connector.log" 2>&1 &
+      - name: Start frontend
+        run: pnpm dev:web -- --host 127.0.0.1 > "$RUNNER_TEMP/ambios-frontend.log" 2>&1 &
+      - name: Wait for local services
+        run: |
+          for url in http://127.0.0.1:8787/api/health http://127.0.0.1:8788/health http://127.0.0.1:3000/agent; do
+            for attempt in $(seq 1 30); do
+              curl --fail --silent --show-error "$url" >/dev/null && break
+              sleep 1
+            done
+            curl --fail --silent --show-error "$url" >/dev/null
+          done
+      - run: pnpm smoke:local
+      - name: Browser WebMCP verification
+        env:
+          AMBIOS_TEST_URL: http://127.0.0.1:3000
+        run: pnpm webmcp:browser-verify
+      - name: Playwright smoke suite
+        env:
+          AMBIOS_TEST_URL: http://127.0.0.1:3000
+        run: pnpm --filter @ambios-ai/api exec playwright test --config ../../playwright.config.ts
+      - name: Upload service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-smoke-logs-${{ github.sha }}
+          path: ${{ runner.temp }}/ambios-*.log
+          if-no-files-found: ignore
+          retention-days: 7

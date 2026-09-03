@@ -1,0 +1,168 @@
+import type { Tool } from "@ambios-ai/shared";
+import { ChevronDown, Folder, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FolderPicker } from "@/components/tools/folders/FolderPicker";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { isValidToolName, validateToolName } from "@/lib/client-utils";
+import { useTools, useUpsertTool } from "@/queries/tools";
+
+interface SaveToolDialogProps {
+  tool: Tool | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved?: (savedTool: Tool) => void;
+}
+
+export function SaveToolDialog({ tool, isOpen, onClose, onSaved }: SaveToolDialogProps) {
+  const { tools } = useTools();
+  const upsertTool = useUpsertTool();
+  const [toolName, setToolName] = useState("");
+  const [selectedFolder, setSelectedFolder] = useState<string | undefined>(undefined);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen && tool) {
+      setToolName(tool.id);
+      setSelectedFolder(tool.folder);
+      setError("");
+    }
+  }, [isOpen, tool]);
+
+  const handleClose = () => {
+    setToolName("");
+    setSelectedFolder(undefined);
+    setError("");
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!tool) return;
+
+    const trimmedName = toolName.trim();
+
+    const validationError = validateToolName(trimmedName);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const existingTool = tools.find((t) => t.id === trimmedName);
+    if (existingTool && trimmedName !== tool.id) {
+      setError("A tool with this name already exists");
+      return;
+    }
+
+    const toolToSave = { ...tool, id: trimmedName, folder: selectedFolder || undefined };
+    upsertTool.mutate(
+      { id: trimmedName, input: toolToSave },
+      {
+        onSuccess: (saved) => {
+          handleClose();
+          onSaved?.(saved);
+        },
+        onError: (error: any) => {
+          console.error("Error saving tool:", error);
+          setError(error.message || "Failed to save tool");
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent
+        onKeyDown={(e) => {
+          if (
+            e.key === "Enter" &&
+            !upsertTool.isPending &&
+            (e.target as HTMLElement).tagName !== "BUTTON"
+          ) {
+            e.preventDefault();
+            handleSave();
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Save Tool</DialogTitle>
+          <DialogDescription>
+            Give your tool a name. This will be used to identify and run your tool.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="tool-name">Tool Name</Label>
+            <Input
+              id="tool-name"
+              value={toolName}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (isValidToolName(value)) {
+                  setToolName(value);
+                  setError("");
+                }
+              }}
+              placeholder="Enter tool name"
+              disabled={upsertTool.isPending}
+              autoFocus
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Folder (optional)</Label>
+            <FolderPicker
+              value={selectedFolder}
+              onChange={(folder) => setSelectedFolder(folder ?? undefined)}
+              disabled={upsertTool.isPending}
+              width="w-[300px]"
+              trigger={
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between"
+                  disabled={upsertTool.isPending}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Folder className="h-4 w-4 flex-shrink-0" />
+                    {selectedFolder ? (
+                      <span className="truncate font-normal">{selectedFolder}</span>
+                    ) : (
+                      <span className="truncate font-normal text-muted-foreground/50">
+                        No folder
+                      </span>
+                    )}
+                  </div>
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              }
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose} disabled={upsertTool.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={upsertTool.isPending}>
+            {upsertTool.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

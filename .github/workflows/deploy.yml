@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected deployment environment
+        required: true
+        type: choice
+        options: [staging, production]
+      worker_url:
+        description: HTTPS Core Worker API URL for post-deploy smoke
+        required: true
+        type: string
+      frontend_url:
+        description: HTTPS frontend URL for post-deploy smoke
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.frontend_url }}
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      AMBIOS_D1_DATABASE_ID: ${{ secrets.AMBIOS_D1_DATABASE_ID }}
+      AMBIOS_KV_NAMESPACE_ID: ${{ secrets.AMBIOS_KV_NAMESPACE_ID }}
+      AMBIOS_R2_BUCKET_NAME: ${{ secrets.AMBIOS_R2_BUCKET_NAME }}
+      AMBIOS_QUEUE_NAME: ${{ secrets.AMBIOS_QUEUE_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm cloudflare:preflight
+      - name: Deploy Next.js frontend to Vercel
+        run: pnpm dlx vercel@latest deploy apps/web --prod --token "$VERCEL_TOKEN" --yes --scope "$VERCEL_ORG_ID"
+      - run: pnpm deploy:core
+      - run: pnpm deploy:connector
+      - name: Post-deploy smoke
+        env:
+          AMBIOS_WORKER_URL: ${{ inputs.worker_url }}
+          AMBIOS_TEST_URL: ${{ inputs.frontend_url }}
+        run: pnpm smoke:local

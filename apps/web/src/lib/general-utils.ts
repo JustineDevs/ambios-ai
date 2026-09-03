@@ -1,0 +1,686 @@
+import {
+  assertValidArrowFunction,
+  findTemplateForSystem,
+  type System,
+  safeStringify,
+  sampleResultObject,
+} from "@ambios-ai/shared";
+import { type ClassValue, clsx } from "clsx";
+import prettierPluginBabel from "prettier/plugins/babel";
+import prettierPluginEstree from "prettier/plugins/estree";
+import prettier from "prettier/standalone";
+import type { SimpleIcon } from "simple-icons";
+import * as simpleIcons from "simple-icons";
+import { twMerge } from "tailwind-merge";
+import type { StepExecutionResult } from "./client-utils";
+
+export const inputErrorStyles = "border-red-500 focus:border-red-500 focus:ring-red-500";
+
+/**
+ * Generate a unique key for a system based on id and environment.
+ * With composite key model, systems are uniquely identified by (id, environment).
+ */
+export function getSystemKey(system: { id: string; environment?: "dev" | "prod" }): string {
+  return system.environment ? `${system.id}:${system.environment}` : system.id;
+}
+
+/**
+ * Find a system by id and optional environment.
+ * If environment is not specified, returns the first match.
+ */
+export function findSystemByIdAndEnv(
+  systems: System[] | undefined,
+  id: string,
+  environment?: "dev" | "prod",
+): System | undefined {
+  if (!systems) return undefined;
+  if (environment) {
+    return systems.find((s) => s.id === id && s.environment === environment);
+  }
+  return systems.find((s) => s.id === id);
+}
+
+/**
+ * Check if a system has a linked environment counterpart (same id, different environment).
+ * DB constraint ensures environment is always 'dev' or 'prod'.
+ */
+export function hasLinkedEnvironment(systems: System[] | undefined, system: System): boolean {
+  if (!systems) return false;
+  const otherEnv = system.environment === "dev" ? "prod" : "dev";
+  return systems.some((s) => s.id === system.id && s.environment === otherEnv);
+}
+
+/**
+ * Get the linked environment system (same id, different environment).
+ * DB constraint ensures environment is always 'dev' or 'prod'.
+ */
+export function getLinkedSystem(systems: System[] | undefined, system: System): System | undefined {
+  if (!systems) return undefined;
+  const otherEnv = system.environment === "dev" ? "prod" : "dev";
+  return systems.find((s) => s.id === system.id && s.environment === otherEnv);
+}
+
+export const copyToClipboard = async (text: string): Promise<boolean> => {
+  if (typeof navigator === "undefined" || typeof document === "undefined") {
+    return false;
+  }
+
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.warn("Clipboard API failed, trying fallback:", err);
+    }
+  }
+
+  const textArea = document.createElement("textarea");
+  try {
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const successful = document.execCommand("copy");
+    return successful;
+  } catch (err) {
+    console.error("Fallback copy failed:", err);
+    return false;
+  } finally {
+    textArea.remove();
+  }
+};
+
+/** Deep equality check for JSON-serializable objects */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  const bObj = b as Record<string, unknown>;
+  return keysA.every((k) => k in bObj && deepEqual((a as Record<string, unknown>)[k], bObj[k]));
+}
+
+export type Theme = "light" | "dark" | "system";
+
+export function getThemeScript(): string {
+  return `
+    (function() {
+      try {
+        const theme = localStorage.getItem('theme') || 'system';
+        let resolved;
+        if (theme === 'system') {
+          resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } else {
+          resolved = theme;
+        }
+        if (resolved === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {}
+    })();
+  `;
+}
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+export const isEmptyData = (value: any): boolean => {
+  if (value === null || value === undefined) return true;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return true;
+    const first = trimmed[0];
+    if (first === "{" || first === "[") {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return isEmptyData(parsed);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object") return Object.keys(value).length === 0;
+  return false;
+};
+
+export const computeStepOutput = (
+  result: StepExecutionResult,
+): { output: any; failed: boolean; emptyHint?: boolean; error?: string } => {
+  const failed = !result?.success;
+  if (failed) {
+    return { output: result?.error || "Step execution failed", failed: true, error: result?.error };
+  }
+  return {
+    output: result?.data,
+    failed: false,
+    emptyHint: isEmptyData(result?.data),
+    error: result?.error,
+  };
+};
+
+// Truncation constants for display
+export const MAX_DISPLAY_SIZE = 2 * 1024 * 1024; // 2MB limit for JSON display
+export const MAX_DISPLAY_LINES = 10000; // Max lines to show in any JSON view
+export const MAX_STRING_PREVIEW_LENGTH = 3000; // Max chars for individual string values
+export const MAX_ARRAY_PREVIEW_ITEMS = 10; // Max array items to show before truncating
+export const MAX_TRUNCATION_DEPTH = 10; // Max depth for nested object traversal
+export const MAX_OBJECT_PREVIEW_KEYS = 100; // Max object keys to show before truncating
+
+export const truncateValue = (value: any, depth = 0): any => {
+  if (depth > MAX_TRUNCATION_DEPTH) {
+    if (Array.isArray(value)) return "[...]";
+    if (typeof value === "object" && value !== null) return "{...}";
+    return "...";
+  }
+
+  if (typeof value === "function") return "[FUNCTION]";
+
+  if (typeof value === "string") {
+    if (value.length > MAX_STRING_PREVIEW_LENGTH) {
+      return (
+        value.substring(0, MAX_STRING_PREVIEW_LENGTH) +
+        `... [${value.length.toLocaleString()} chars total]`
+      );
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length > MAX_ARRAY_PREVIEW_ITEMS) {
+      return [
+        ...value.slice(0, MAX_ARRAY_PREVIEW_ITEMS).map((v) => truncateValue(v, depth + 1)),
+        `... ${value.length - MAX_ARRAY_PREVIEW_ITEMS} more items`,
+      ];
+    }
+    return value.map((v) => truncateValue(v, depth + 1));
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const result: any = {};
+    const keys = Object.keys(value);
+    const keysToShow = keys.slice(0, MAX_OBJECT_PREVIEW_KEYS);
+    for (const key of keysToShow) {
+      result[key] = truncateValue(value[key], depth + 1);
+    }
+    if (keys.length > MAX_OBJECT_PREVIEW_KEYS) {
+      result["..."] = `${(keys.length - MAX_OBJECT_PREVIEW_KEYS).toLocaleString()} more keys`;
+    }
+    return result;
+  }
+
+  return value;
+};
+
+export const truncateForDisplay = (data: any): { value: string; truncated: boolean } => {
+  if (data === null || data === undefined) {
+    return { value: "{}", truncated: false };
+  }
+  if (typeof data === "function") {
+    return { value: JSON.stringify("[FUNCTION]"), truncated: false };
+  }
+  if (typeof data === "string") {
+    if (data.length > MAX_STRING_PREVIEW_LENGTH) {
+      const truncatedString = data.substring(0, MAX_STRING_PREVIEW_LENGTH);
+      const lastNewline = truncatedString.lastIndexOf("\n");
+      const cleanTruncated = truncatedString.substring(
+        0,
+        lastNewline > 0 ? lastNewline : MAX_STRING_PREVIEW_LENGTH,
+      );
+      const note = `\n\n... [String truncated - showing ${MAX_STRING_PREVIEW_LENGTH.toLocaleString()} of ${data.length.toLocaleString()} characters]`;
+      const combined = `${cleanTruncated}${note}`;
+      return { value: JSON.stringify(combined), truncated: true };
+    }
+    return { value: JSON.stringify(data), truncated: false };
+  }
+  try {
+    const truncatedData = truncateValue(data);
+    let jsonString = JSON.stringify(truncatedData, null, 2);
+    if (jsonString.length > MAX_DISPLAY_SIZE) {
+      jsonString = jsonString.substring(0, MAX_DISPLAY_SIZE);
+      const lastNewline = jsonString.lastIndexOf("\n");
+      if (lastNewline > 0) jsonString = jsonString.substring(0, lastNewline);
+      return {
+        value: `${jsonString}\n\n... [Data truncated - exceeds size limit]`,
+        truncated: true,
+      };
+    }
+    const lines = jsonString.split("\n");
+    if (lines.length > MAX_DISPLAY_LINES) {
+      return {
+        value: `${lines.slice(0, MAX_DISPLAY_LINES).join("\n")}\n\n... [Truncated - too many lines]`,
+        truncated: true,
+      };
+    }
+    const originalJson = JSON.stringify(data, null, 2);
+    const wasTruncated = originalJson !== jsonString;
+    return { value: jsonString, truncated: wasTruncated };
+  } catch {
+    const stringValue = String(data);
+    if (stringValue.length > MAX_STRING_PREVIEW_LENGTH) {
+      const preview = `${stringValue.substring(0, MAX_STRING_PREVIEW_LENGTH)}... [Truncated]`;
+      return { value: JSON.stringify(preview), truncated: true };
+    }
+    return { value: JSON.stringify(stringValue), truncated: false };
+  }
+};
+
+let _simpleIconsBySlug: Map<string, SimpleIcon> | null = null;
+
+function getSimpleIconsBySlug(): Map<string, SimpleIcon> {
+  if (_simpleIconsBySlug) return _simpleIconsBySlug;
+
+  _simpleIconsBySlug = new Map();
+  for (const key of Object.keys(simpleIcons)) {
+    if (key.startsWith("si") && key.length > 2) {
+      const icon = simpleIcons[key] as SimpleIcon;
+      const normalizedSlug = icon.slug.toLowerCase().replace(/[^a-z0-9]/g, "");
+      _simpleIconsBySlug.set(normalizedSlug, icon);
+    }
+  }
+  return _simpleIconsBySlug;
+}
+
+export function getSimpleIcon(name: string): SimpleIcon | null {
+  if (!name || name === "default") return null;
+
+  const slugMap = getSimpleIconsBySlug();
+  const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return slugMap.get(normalized) || null;
+}
+
+/** Returns true for brand colors that need a light treatment on dark surfaces. */
+export function isDarkIconHex(hex: string): boolean {
+  const normalized = hex.replace(/^#/, "");
+  if (!/^[\da-f]{6}$/i.test(normalized)) return false;
+  const value = Number.parseInt(normalized, 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue < 96;
+}
+
+export interface SimpleIconEntry {
+  slug: string;
+  title: string;
+  hex: string;
+}
+
+let _allSimpleIconsCache: SimpleIconEntry[] | null = null;
+
+export function getAllSimpleIcons(): SimpleIconEntry[] {
+  if (_allSimpleIconsCache) return _allSimpleIconsCache;
+
+  const slugMap = getSimpleIconsBySlug();
+  _allSimpleIconsCache = Array.from(slugMap.values()).map((icon) => ({
+    slug: icon.slug,
+    title: icon.title,
+    hex: icon.hex,
+  }));
+
+  return _allSimpleIconsCache;
+}
+
+export function searchSimpleIcons(query: string, limit = 20): SimpleIconEntry[] {
+  if (!query || query.length < 2) return [];
+
+  const allIcons = getAllSimpleIcons();
+  const lowerQuery = query.toLowerCase();
+
+  const exactMatches: SimpleIconEntry[] = [];
+  const startsWithMatches: SimpleIconEntry[] = [];
+  const containsMatches: SimpleIconEntry[] = [];
+
+  for (const icon of allIcons) {
+    const lowerTitle = icon.title.toLowerCase();
+    const lowerSlug = icon.slug.toLowerCase();
+
+    if (lowerTitle === lowerQuery || lowerSlug === lowerQuery) {
+      exactMatches.push(icon);
+    } else if (lowerTitle.startsWith(lowerQuery) || lowerSlug.startsWith(lowerQuery)) {
+      startsWithMatches.push(icon);
+    } else if (lowerTitle.includes(lowerQuery) || lowerSlug.includes(lowerQuery)) {
+      containsMatches.push(icon);
+    }
+  }
+
+  return [...exactMatches, ...startsWithMatches, ...containsMatches].slice(0, limit);
+}
+
+// Resolved icon type - either a SimpleIcon or a Lucide icon name
+export type ResolvedIcon =
+  | { type: "simpleicons"; icon: SimpleIcon }
+  | { type: "lucide"; name: string }
+  | null;
+
+function resolveIconString(icon: string | null | undefined): ResolvedIcon {
+  if (!icon) return null;
+
+  const colonIndex = icon.indexOf(":");
+  if (colonIndex !== -1) {
+    const source = icon.substring(0, colonIndex);
+    const name = icon.substring(colonIndex + 1);
+
+    if (source === "lucide") {
+      return { type: "lucide", name };
+    }
+
+    if (source === "simpleicons") {
+      const simpleIcon = getSimpleIcon(name);
+      if (simpleIcon) {
+        return { type: "simpleicons", icon: simpleIcon };
+      }
+      // Fallback: if the provided simpleicons name doesn't resolve, try lucide.
+      return { type: "lucide", name };
+    }
+
+    // Unknown prefix: try SimpleIcons first, then Lucide.
+    const simpleIcon = getSimpleIcon(name) || getSimpleIcon(icon);
+    if (simpleIcon) {
+      return { type: "simpleicons", icon: simpleIcon };
+    }
+    return { type: "lucide", name };
+  }
+
+  // No prefix: try SimpleIcons first, then return null so callers can fall back to templates.
+  const simpleIcon = getSimpleIcon(icon);
+  if (simpleIcon) {
+    return { type: "simpleicons", icon: simpleIcon };
+  }
+  return null;
+}
+
+/**
+ * Resolve a system's icon to a renderable format.
+ * Handles:
+ * - New format: "simpleicons:salesforce" or "lucide:database"
+ * - Legacy format: "salesforce" (assumes simpleicons)
+ * - Fallback to template matching by system id/urlHost
+ */
+export function resolveSystemIcon(system: Partial<System>): ResolvedIcon {
+  // First, try the system's own icon field
+  const directIcon = resolveIconString(system.icon);
+  if (directIcon) return directIcon;
+
+  // Fallback: try to get icon from templates via findTemplateForSystem
+  const match = findTemplateForSystem(system);
+  const templateIcon = resolveIconString(match?.template.icon);
+  if (templateIcon) return templateIcon;
+
+  return null;
+}
+
+// Computes the execution-ready payload from the manual JSON only.
+// Uploaded files are carried separately via the dedicated `files` channel.
+export const computeToolPayload = (
+  manualPayloadText: string,
+  _filePayloads?: Record<string, unknown>,
+): any => {
+  try {
+    return JSON.parse(manualPayloadText || "{}");
+  } catch {
+    return {};
+  }
+};
+
+// Removes file keys from the manual payload text
+export const removeFileKeysFromPayload = (payloadText: string, fileKeys: string[]): string => {
+  if (fileKeys.length === 0) return payloadText;
+
+  try {
+    const parsed = JSON.parse(payloadText || "{}");
+    fileKeys.forEach((key) => {
+      delete parsed[key];
+    });
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return payloadText;
+  }
+};
+
+export const buildStepInput = (
+  initialPayload: any,
+  steps: any[],
+  stepResults: Record<string, any>,
+  upToIndex: number,
+) => {
+  let stepInput = { ...initialPayload };
+
+  for (let i = 0; i <= upToIndex && i < steps.length; i++) {
+    const step = steps[i];
+    const result = stepResults[step.id];
+    if (result !== undefined && result !== null) {
+      stepInput = {
+        ...stepInput,
+        [`${step.id}`]: result,
+      };
+    }
+  }
+
+  return stepInput;
+};
+
+export const buildPreviousStepResults = (
+  steps: any[],
+  stepResults: Record<string, any>,
+  upToIndex: number,
+): Record<string, any> => {
+  const results: Record<string, any> = {};
+
+  for (let i = 0; i <= upToIndex && i < steps.length; i++) {
+    const step = steps[i];
+    const result = stepResults[step.id];
+    if (result !== undefined && result !== null) {
+      results[step.id] = result;
+    }
+  }
+
+  return results;
+};
+
+const PRETTIER_PLUGINS = [
+  (prettierPluginBabel as any).default ?? (prettierPluginBabel as any),
+  (prettierPluginEstree as any).default ?? (prettierPluginEstree as any),
+];
+
+export async function formatJavaScriptCode(code: string): Promise<string> {
+  if (!code || typeof code !== "string") return code;
+  try {
+    const formatted = await prettier.format(code, {
+      parser: "babel",
+      plugins: PRETTIER_PLUGINS,
+      semi: true,
+      singleQuote: true,
+      trailingComma: "es5",
+      tabWidth: 2,
+      printWidth: 100,
+      arrowParens: "always",
+    });
+    return formatted.trimEnd();
+  } catch (error) {
+    console.debug("Code formatting failed:", error);
+    return code;
+  }
+}
+
+export function getGroupedTimezones(): Record<string, Array<{ value: string; label: string }>> {
+  const timezones = Intl.supportedValuesOf("timeZone").map((tz) => ({
+    value: tz,
+    label: tz.replace(/_/g, " "),
+  }));
+
+  return timezones.reduce(
+    (acc, timezone) => {
+      const group = timezone.value.split("/")[0]; // Use value instead of label for grouping
+      if (!acc[group]) {
+        acc[group] = [];
+      }
+      acc[group].push(timezone);
+      return acc;
+    },
+    {} as Record<string, Array<{ value: string; label: string }>>,
+  );
+}
+
+/**
+ * Wraps a data selector function to limit the number of iterations
+ * @param dataSelectorCode The original data selector code
+ * @param limit Maximum number of items to return (defaults to 1)
+ * @returns Wrapped code that limits the array to specified number of items
+ *
+ * @example
+ * const original = "(sourceData) => { return [1,2,3] }";
+ * const wrapped = wrapDataSelectorWithLimit(original, 1);
+ * // Result: "(sourceData) => { const originalFunction = (sourceData) => { return [1,2,3] }; const out = originalFunction(sourceData); return Array.isArray(out) ? out.slice(0, 1) : out; }"
+ */
+export function wrapDataSelectorWithLimit(
+  dataSelectorCode: string | undefined | null,
+  limit = 1,
+): string {
+  if (!dataSelectorCode?.trim()) {
+    return dataSelectorCode || "";
+  }
+
+  const trimmedCode = assertValidArrowFunction(dataSelectorCode);
+
+  return `(sourceData) => {
+  const originalFunction = ${trimmedCode};
+  const out = originalFunction(sourceData);
+  return Array.isArray(out) ? out.slice(0, ${limit}) : out;
+}`;
+}
+
+export function isAbortError(error: unknown): boolean {
+  if (!error) return false;
+  if (typeof error === "string") return error.startsWith("AbortError:");
+  if (error instanceof DOMException) return error.name === "AbortError";
+  if (error instanceof Error) {
+    return error.name === "AbortError" || error.message.startsWith("AbortError:");
+  }
+  return false;
+}
+
+export function formatDurationShort(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 3600000) {
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.round((ms % 60000) / 1000);
+    return `${mins}m ${secs}s`;
+  }
+  const hours = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return `${hours}h ${mins}m`;
+}
+
+export const handleCopyCode = async (code: string): Promise<boolean> => {
+  try {
+    const decodedCode = code
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+    return await copyToClipboard(decodedCode);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Truncates tool result to fit within max length by progressively sampling data.
+ * Only samples fields that can be large (data, stepResults, toolPayload).
+ * All other fields (diffs, config, metadata, etc.) are preserved as-is.
+ *
+ * @param result - The result data to truncate (string, object, or array)
+ * @param maxLength - Maximum character length (default: 100000)
+ * @returns Truncated string representation of the result
+ */
+export function truncateToolResult(result: any, maxLength = 100000): string {
+  // If result is already a string, just truncate if needed
+  if (typeof result === "string") {
+    return result.length > maxLength
+      ? `${result.slice(0, maxLength)}\n\n... [Output truncated - result too large]`
+      : result;
+  }
+
+  // For objects/arrays, try progressive sampling before stringifying
+  try {
+    // First try without any sampling - most results fit
+    let resultString = JSON.stringify(result, null, 2);
+    if (resultString.length <= maxLength) {
+      return resultString;
+    }
+
+    // Only sample fields that can be large - preserve everything else
+    const sampleableKeys = ["data", "stepResults", "toolPayload", "rawData", "transformedData"];
+
+    const sampleFields = (obj: any, sampleSize: number): any => {
+      if (typeof obj !== "object" || obj === null || Array.isArray(obj)) {
+        return sampleResultObject(obj, sampleSize);
+      }
+
+      const sampled: Record<string, any> = {};
+      for (const [key, val] of Object.entries(obj)) {
+        sampled[key] = sampleableKeys.includes(key) ? sampleResultObject(val, sampleSize) : val;
+      }
+      return sampled;
+    };
+
+    // Sample with size 3
+    let sampled = sampleFields(result, 4);
+    resultString = JSON.stringify(sampled, null, 2);
+
+    if (resultString.length <= maxLength) {
+      return resultString;
+    }
+
+    // More aggressive sampling with size 1
+    sampled = sampleFields(result, 1);
+    resultString = JSON.stringify(sampled, null, 2);
+
+    if (resultString.length <= maxLength) {
+      return resultString;
+    }
+
+    // Last resort: truncate the string (may break JSON structure)
+    return `${resultString.slice(0, maxLength)}\n\n... [Output truncated - result too large]`;
+  } catch {
+    // If sampling or stringifying fails (e.g., circular references), use safe stringify
+    const basicString = safeStringify(result);
+    return basicString.length > maxLength
+      ? `${basicString.slice(0, maxLength)}\n\n... [Output truncated - result too large]`
+      : basicString;
+  }
+}
+
+/**
+ * Convert camelCase, snake_case, or kebab-case to human-readable format.
+ * e.g., "browserLink" -> "Browser Link", "user_name" -> "User Name"
+ */
+export function formatLabel(label: string): string {
+  if (!label) return "";
+  try {
+    return (
+      label
+        // Insert space before uppercase letters (camelCase)
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        // Replace underscores and hyphens with spaces
+        .replace(/[_-]/g, " ")
+        // Capitalize first letter of each word
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+    );
+  } catch {
+    return label;
+  }
+}

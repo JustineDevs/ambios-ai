@@ -1,0 +1,3 @@
+{
+  "extends": "@ambios-ai/config/tsconfig.base.json"
+}

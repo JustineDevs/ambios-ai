@@ -1,0 +1,389 @@
+"use client";
+
+import {
+  Blocks,
+  Check,
+  FileText,
+  FlaskConical,
+  Hammer,
+  KeyRound,
+  Loader2,
+  Plus,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useAgentModal } from "@/components/agent/AgentModalContext";
+import { Button } from "@/components/ui/button";
+import {
+  EnvironmentBadge,
+  EnvironmentSwitch,
+  getEnvironmentType,
+} from "@/components/ui/environment-label";
+import { MiniCard } from "@/components/ui/mini-card";
+import { SystemIcon } from "@/components/ui/system-icon";
+import { getToolBuilderPrompts } from "@/lib/agent/agent-context";
+import { cn } from "@/lib/general-utils";
+import { useSystems } from "@/queries/systems";
+import { useRightSidebar } from "../sidebar/RightSidebarContext";
+import { useSystemConfig } from "./context";
+import type { SectionStatus, SystemSection } from "./context/types";
+import { AuthenticationSection } from "./sections/AuthenticationSection";
+import { ConfigurationSection } from "./sections/ConfigurationSection";
+import { ContextSection } from "./sections/ContextSection";
+
+const SECTIONS: SystemSection[] = ["configuration", "authentication", "context"];
+
+const SECTION_CONFIG: Record<SystemSection, { icon: React.ElementType; label: string }> = {
+  configuration: { icon: Blocks, label: "Configuration" },
+  authentication: { icon: KeyRound, label: "Authentication" },
+  context: { icon: FileText, label: "Knowledge Base" },
+};
+
+function getStatusColor(status: SectionStatus) {
+  if (status.hasErrors) {
+    return { text: "text-red-600 dark:text-red-400", dot: "bg-red-600 dark:bg-red-400" };
+  }
+  if (status.isComplete) {
+    return { text: "text-green-600 dark:text-green-400", dot: "bg-green-600 dark:bg-green-400" };
+  }
+  return { text: "text-muted-foreground", dot: "bg-muted-foreground" };
+}
+
+export function SystemPlayground() {
+  const router = useRouter();
+  const { systems } = useSystems();
+  const {
+    sendMessageToAgent,
+    setShowAgent,
+    setAgentMode,
+    setSystemConfig: setContextSystemConfig,
+    agentPortalRef,
+    AgentSidebarComponent,
+  } = useRightSidebar();
+  const { openAgentModal } = useAgentModal();
+
+  const {
+    system,
+    activeSection,
+    setActiveSection,
+    getSectionStatus,
+    getSystemContextForAgent,
+    saveSystem,
+    isSaving,
+    isNewSystem,
+  } = useSystemConfig();
+
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Compute linked systems for environment switcher
+  // With composite key model, linked systems have the same ID but different environment
+  const linkedDevSystem = useMemo(() => {
+    if (!system.id) return null;
+    // Only find a dev system if we're NOT currently viewing a dev system
+    if (system.environment === "dev") return null;
+    return systems.find((s) => s.id === system.id && s.environment === "dev") || null;
+  }, [systems, system.id, system.environment]);
+
+  const linkedProdSystem = useMemo(() => {
+    if (!system.id) return null;
+    // Only find a prod system if we're NOT currently viewing a prod system
+    if (system.environment === "prod") return null;
+    return systems.find((s) => s.id === system.id && s.environment === "prod") || null;
+  }, [systems, system.id, system.environment]);
+
+  const envType = useMemo(() => {
+    return getEnvironmentType(system.environment, !!linkedDevSystem, !!linkedProdSystem);
+  }, [system.environment, linkedDevSystem, linkedProdSystem]);
+
+  // Determine if we have a linked system
+  const hasLinkedSystem = !!linkedDevSystem || !!linkedProdSystem;
+  const isViewingDev = system.environment === "dev";
+
+  const handleEnvSwitch = useCallback(() => {
+    // With composite key model, dev and prod have the same ID
+    // Use query parameter to switch between environments
+    if (isViewingDev && linkedProdSystem) {
+      router.push(`/systems/${encodeURIComponent(system.id)}?env=prod`);
+    } else if (!isViewingDev && linkedDevSystem) {
+      router.push(`/systems/${encodeURIComponent(system.id)}?env=dev`);
+    }
+  }, [router, linkedDevSystem, linkedProdSystem, isViewingDev, system.id]);
+
+  const systemConfigForAgent = useMemo(
+    () => getSystemContextForAgent(),
+    [getSystemContextForAgent],
+  );
+
+  useEffect(() => {
+    setAgentMode("system");
+    setShowAgent(true);
+
+    return () => {
+      setAgentMode("tool");
+      setContextSystemConfig(undefined);
+      setShowAgent(false);
+    };
+  }, [setAgentMode, setContextSystemConfig, setShowAgent]);
+
+  useEffect(() => {
+    setContextSystemConfig(systemConfigForAgent);
+  }, [setContextSystemConfig, systemConfigForAgent]);
+
+  const canSave = useMemo(() => {
+    return Boolean(system.id?.trim() && system.url?.trim());
+  }, [system.id, system.url]);
+
+  const handleSave = useCallback(async () => {
+    const success = await saveSystem();
+    if (success) {
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2000);
+      if (isNewSystem && system.id) {
+        router.replace(`/systems/${encodeURIComponent(system.id)}`);
+      }
+    }
+  }, [saveSystem, isNewSystem, system.id, router]);
+
+  const handleBuildTool = useCallback(() => {
+    if (!system.id) return;
+    const prompts = getToolBuilderPrompts({ systemIds: [system.id], systems: [system] });
+    openAgentModal(prompts);
+  }, [openAgentModal, system]);
+
+  const handleTestSystem = useCallback(() => {
+    if (!system.id) return;
+
+    const testPrompt = `Test my current system configuration for "${system.id}" via call_system.`;
+
+    setShowAgent(true);
+    sendMessageToAgent(testPrompt);
+  }, [system.id, setShowAgent, sendMessageToAgent]);
+
+  const renderAllSections = () => (
+    <>
+      {SECTIONS.map((section) => {
+        const isActive = activeSection === section;
+        return (
+          <div key={section} className={isActive ? undefined : "hidden"}>
+            {section === "configuration" && <ConfigurationSection />}
+            {section === "authentication" && <AuthenticationSection />}
+            {section === "context" && <ContextSection showRefreshButton />}
+          </div>
+        );
+      })}
+    </>
+  );
+
+  const activeIndex = SECTIONS.indexOf(activeSection);
+
+  const handleNavigation = useCallback(
+    (direction: "prev" | "next") => {
+      const newIndex =
+        direction === "prev"
+          ? Math.max(0, activeIndex - 1)
+          : Math.min(SECTIONS.length - 1, activeIndex + 1);
+      if (newIndex !== activeIndex) {
+        setActiveSection(SECTIONS[newIndex]);
+      }
+    },
+    [activeIndex, setActiveSection],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).isContentEditable
+      )
+        return;
+
+      if (e.key === "ArrowLeft" && activeIndex > 0) {
+        e.preventDefault();
+        handleNavigation("prev");
+      } else if (e.key === "ArrowRight" && activeIndex < SECTIONS.length - 1) {
+        e.preventDefault();
+        handleNavigation("next");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeIndex, handleNavigation]);
+
+  return (
+    <div className="flex h-full w-full flex-col px-6 py-3">
+      <div className="mb-2 flex flex-shrink-0 items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <SystemIcon system={system} size={20} fallbackClassName="text-muted-foreground" />
+            <h1 className="font-semibold text-xl">{system.name || system.id || "New System"}</h1>
+          </div>
+
+          {/* Environment badge and switcher */}
+          {!isNewSystem &&
+            envType !== "none" &&
+            (hasLinkedSystem ? (
+              <EnvironmentSwitch
+                value={isViewingDev ? "dev" : "prod"}
+                onChange={(val) => {
+                  if (val !== (isViewingDev ? "dev" : "prod")) {
+                    handleEnvSwitch();
+                  }
+                }}
+              />
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <EnvironmentBadge type={envType} size="sm" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const systemName = system.name || system.id;
+                    const targetEnv = envType === "prod" ? "dev" : "prod";
+                    const prompt = encodeURIComponent(
+                      `Create a ${targetEnv === "dev" ? "development" : "production"} version of the "${systemName}" system with the same ID (${system.id}) but environment='${targetEnv}'. The ${targetEnv} system should have the same structure but with ${targetEnv === "dev" ? "development/sandbox" : "production"} credentials.`,
+                    );
+                    router.push(`/?prompt=${prompt}`);
+                  }}
+                  className="flex items-center gap-1 rounded-md border border-muted-foreground/40 border-dashed px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground transition-colors hover:border-muted-foreground/60 hover:text-foreground"
+                >
+                  <Plus className="h-3 w-3" />
+                  {envType === "prod" ? "Dev" : "Prod"}
+                </button>
+              </div>
+            ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {system.id && (
+            <Button
+              variant="glass"
+              size="sm"
+              onClick={handleTestSystem}
+              className="gap-1.5 rounded-xl"
+            >
+              <FlaskConical className="h-4 w-4" />
+              Test System
+            </Button>
+          )}
+
+          {!isNewSystem && system.id && (
+            <Button
+              variant="glass"
+              size="sm"
+              onClick={handleBuildTool}
+              className="gap-1.5 rounded-xl"
+            >
+              <Hammer className="h-4 w-4" />
+              Build Tool
+            </Button>
+          )}
+
+          <Button
+            variant="glass-primary"
+            size="sm"
+            onClick={handleSave}
+            disabled={!canSave || isSaving}
+            className="min-w-[90px] gap-1.5"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : justSaved ? (
+              <>
+                <Check className="h-4 w-4" />
+                Saved
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center justify-center gap-4 py-3">
+          <div className="flex items-center gap-8">
+            {SECTIONS.map((section) => {
+              const config = SECTION_CONFIG[section];
+              const Icon = config.icon;
+              const isActive = activeSection === section;
+              const status = getSectionStatus(section);
+              const statusColor = getStatusColor(status);
+
+              return (
+                <MiniCard
+                  key={section}
+                  isActive={isActive}
+                  onClick={() => setActiveSection(section)}
+                  width={180}
+                  height={110}
+                >
+                  <div className="flex flex-1 flex-col items-center justify-center">
+                    <div
+                      className={cn(
+                        "rounded-full p-2",
+                        isActive ? "bg-primary/20" : "bg-primary/10",
+                      )}
+                    >
+                      <Icon
+                        className={cn("h-4 w-4", isActive ? "text-primary" : "text-primary/80")}
+                      />
+                    </div>
+                    <span className="mt-1.5 font-semibold text-[11px]">{config.label}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1">
+                    <span
+                      className={cn(
+                        "flex items-center gap-1.5 font-semibold text-[10px]",
+                        statusColor.text,
+                      )}
+                    >
+                      <span className={cn("h-2 w-2 rounded-full", statusColor.dot)} />
+                      {status.label}
+                    </span>
+                  </div>
+                </MiniCard>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-2">
+          <div className="flex gap-1">
+            {SECTIONS.map((section, idx) => (
+              <button
+                type="button"
+                key={`dot-${section}`}
+                onClick={() => setActiveSection(section)}
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full transition-colors",
+                  idx === activeIndex ? "bg-primary" : "bg-muted",
+                )}
+                aria-label={`Go to ${section}`}
+                title={`Go to ${section}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto pt-4 pr-4" style={{ scrollbarGutter: "stable" }}>
+          <div className="mx-auto min-h-[400px] max-w-4xl px-2">{renderAllSections()}</div>
+        </div>
+      </div>
+
+      {agentPortalRef &&
+        AgentSidebarComponent &&
+        createPortal(
+          <AgentSidebarComponent
+            className="h-full"
+            hideHeader
+            mode="system"
+            systemConfig={systemConfigForAgent}
+          />,
+          agentPortalRef,
+        )}
+    </div>
+  );
+}

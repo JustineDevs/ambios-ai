@@ -1,0 +1,988 @@
+import { operationPath } from "./operations.js";
+import { serviceOriginsFromEnv } from "./service-origins.js";
+import {
+  SSELogSubscriptionManager,
+  type SSELogSubscriptionOptions,
+  type SSESubscription,
+} from "./sse-log-subscription.js";
+import {
+  type ClientRequestSource,
+  type ExecutionFileEnvelope,
+  type ExtractArgs,
+  type ExtractResult,
+  type FileReference,
+  type RequestSource,
+  type Run,
+  RunStatus,
+  type System,
+  type Tool,
+  type ToolResult,
+  type ToolSchedule,
+} from "./types.js";
+import { isAbortError } from "./utils.js";
+
+type ClientToolStepResult = {
+  stepId: string;
+  success: boolean;
+  data?: any;
+  error?: string;
+  stepFileKeys?: string[];
+};
+
+export class AmbiOSClient {
+  private apiKey: string;
+  private sseManager: SSELogSubscriptionManager;
+  public readonly apiEndpoint: string;
+  private onInfrastructureError?: () => void;
+
+  constructor({
+    apiKey,
+    apiEndpoint,
+    onInfrastructureError,
+  }: {
+    apiKey: string;
+    apiEndpoint?: string;
+    onInfrastructureError?: () => void;
+  }) {
+    this.apiKey = apiKey;
+    this.apiEndpoint =
+      apiEndpoint ??
+      serviceOriginsFromEnv({
+        NODE_ENV: typeof process === "undefined" ? "production" : process.env.NODE_ENV,
+      }).coreApiOrigin;
+    this.sseManager = new SSELogSubscriptionManager(this.apiEndpoint, this.apiKey);
+    this.onInfrastructureError = onInfrastructureError;
+  }
+
+  private isInfrastructureError(error: unknown): boolean {
+    if (isAbortError(error)) return false;
+    if (error instanceof TypeError && error.message.toLowerCase().includes("fetch")) return true;
+    if (error instanceof Error && error.name === "TimeoutError") return true;
+    return false;
+  }
+
+  protected async restRequest<T>(
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    path: string,
+    body?: any,
+    extraHeaders?: Record<string, string>,
+    requestInit?: RequestInit,
+  ): Promise<T> {
+    const url = `${this.apiEndpoint.replace(/\/$/, "")}${path}`;
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      ...extraHeaders,
+    };
+
+    if (body && method !== "GET") {
+      headers["Content-Type"] = "application/json";
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: requestInit?.signal,
+      });
+    } catch (error) {
+      if (this.isInfrastructureError(error)) {
+        this.onInfrastructureError?.();
+      }
+      throw error;
+    }
+
+    if (!response.ok) {
+      // Trigger infrastructure error callback for 5xx errors
+      if (response.status >= 500) {
+        this.onInfrastructureError?.();
+      }
+
+      const errorText = await response.text();
+      let errorMessage = `HTTP ${response.status}: ${errorText}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        const error = (errorJson as any).error;
+        if (typeof error === "string") {
+          errorMessage = error;
+        } else if (error && typeof error === "object") {
+          errorMessage = error.message || JSON.stringify(error);
+        }
+      } catch {
+        // ignore
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Handle empty responses (e.g., 204 No Content)
+    const text = await response.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
+  }
+
+  async subscribeToLogsSSE(options: SSELogSubscriptionOptions = {}): Promise<SSESubscription> {
+    return this.sseManager.subscribeToLogs(options);
+  }
+
+  async disconnect(): Promise<void> {
+    await this.sseManager.disconnect();
+  }
+
+  /**
+   * Execute a saved tool by ID (creates run record)
+   */
+  async runTool(params: {
+    toolId: string;
+    payload?: Record<string, any>;
+    files?: Record<string, ExecutionFileEnvelope>;
+    credentials?: Record<string, string>;
+    options?: {
+      timeout?: number;
+      traceId?: string;
+      webhookUrl?: string;
+      async?: boolean;
+      requestSource?: ClientRequestSource;
+    };
+    runId?: string;
+  }): Promise<ToolResult> {
+    const response = await this.restRequest<{
+      runId: string;
+      toolId: string;
+      status: "running" | "success" | "failed" | "aborted";
+      tool: Tool;
+      toolPayload?: Record<string, any>;
+      data?: any;
+      error?: string;
+      stepResults?: ClientToolStepResult[];
+    }>("POST", operationPath("legacyToolRunById", { id: params.toolId }), {
+      inputs: params.payload,
+      files: params.files,
+      credentials: params.credentials,
+      options: params.options,
+      runId: params.runId,
+    });
+
+    return {
+      success: response.status === "success",
+      data: response.data,
+      error: response.error,
+      tool: response.tool,
+      stepResults: response.stepResults?.map((sr) => ({ ...sr })) || [],
+    };
+  }
+
+  /**
+   * Execute a tool config directly without persisting the tool.
+   * Optionally creates a run record when `createRun` is true.
+   */
+  async runToolConfig(params: {
+    tool: Tool;
+    payload?: Record<string, any>;
+    files?: Record<string, ExecutionFileEnvelope>;
+    credentials?: Record<string, string>;
+    options?: { timeout?: number; requestSource?: ClientRequestSource };
+    runId?: string;
+    traceId?: string;
+    createRun?: boolean;
+  }): Promise<ToolResult> {
+    const path = `${operationPath("legacyToolRun")}${params.createRun ? "?createRun=true" : ""}`;
+    const response = await this.restRequest<{
+      runId: string;
+      toolId?: string;
+      tool?: Tool;
+      // New format (OpenAPIRun)
+      status?: "running" | "success" | "failed" | "aborted";
+      toolPayload?: Record<string, unknown>;
+      metadata?: {
+        startedAt: string;
+        completedAt?: string;
+        durationMs?: number;
+      };
+      // Old format (backward compatibility)
+      success?: boolean;
+      // Shared fields
+      data?: any;
+      error?: string;
+      stepResults?: ClientToolStepResult[];
+      options?: Record<string, unknown>;
+      requestSource?: string;
+      traceId?: string;
+    }>(
+      "POST",
+      path,
+      {
+        tool: params.tool,
+        payload: params.payload,
+        files: params.files,
+        credentials: params.credentials,
+        options: params.options,
+        runId: params.runId,
+      },
+      params.traceId ? { "X-Trace-Id": params.traceId } : undefined,
+    );
+
+    // Handle both old and new response formats
+    const success = response.status ? response.status === "success" : (response.success ?? false);
+
+    return {
+      success,
+      data: response.data,
+      error: response.error,
+      tool: response.tool || params.tool,
+      stepResults: response.stepResults?.map((sr) => ({ ...sr })) || [],
+    };
+  }
+
+  async abortToolExecution(runId: string): Promise<{ success: boolean; runId: string }> {
+    const response = await this.restRequest<any>(
+      "POST",
+      operationPath("legacyRunCancel", { id: runId }),
+    );
+    return { success: true, runId: response.runId };
+  }
+
+  /**
+   * Execute a single step without creating a run in the database.
+   * Used for individual step testing in the playground.
+   */
+  async executeStep({
+    step,
+    payload,
+    files,
+    previousResults,
+    credentials,
+    options,
+    runId,
+    mode,
+    systemIds,
+  }: {
+    step: any;
+    payload?: Record<string, any>;
+    files?: Record<string, ExecutionFileEnvelope>;
+    previousResults?: Record<string, any>;
+    credentials?: Record<string, string>;
+    options?: { timeout?: number };
+    runId?: string;
+    mode?: "dev" | "prod";
+    systemIds?: string[];
+  }): Promise<{
+    stepId: string;
+    success: boolean;
+    data?: any;
+    error?: string;
+    updatedStep?: any;
+    stepFileKeys?: string[];
+    producedFiles?: Record<string, ExecutionFileEnvelope>;
+  }> {
+    return this.restRequest("POST", operationPath("legacyToolStepRun"), {
+      step,
+      payload,
+      files,
+      previousResults,
+      credentials,
+      options,
+      runId,
+      mode,
+      systemIds,
+    });
+  }
+
+  /**
+   * Abort an in-flight step execution by runId.
+   */
+  async abortStep(runId: string): Promise<{ success: boolean; runId: string }> {
+    return this.restRequest("POST", operationPath("legacyToolStepAbort"), { runId });
+  }
+
+  /**
+   * Execute a final transform without creating a run in the database.
+   * Used for transform testing in the playground.
+   */
+  async executeTransformOnly({
+    outputTransform,
+    outputSchema,
+    inputSchema,
+    payload,
+    files,
+    stepResults,
+    responseFilters,
+    options,
+    runId,
+  }: {
+    outputTransform: string;
+    outputSchema?: any;
+    inputSchema?: any;
+    payload?: Record<string, any>;
+    files?: Record<string, ExecutionFileEnvelope>;
+    stepResults?: Record<string, any>;
+    responseFilters?: any[];
+    options?: { timeout?: number };
+    runId?: string;
+  }): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+    updatedTransform?: string;
+    updatedOutputSchema?: any;
+  }> {
+    return this.restRequest("POST", operationPath("legacyToolTransformRun"), {
+      outputTransform,
+      outputSchema,
+      inputSchema,
+      payload,
+      files,
+      stepResults,
+      responseFilters,
+      options,
+      runId,
+    });
+  }
+
+  /**
+   * Create a run entry in the database after manual tool execution.
+   * Used when "Run All Steps" completes in the playground.
+   */
+  async createRun({
+    toolId,
+    toolConfig,
+    toolResult,
+    stepResults,
+    toolPayload,
+    status,
+    error,
+    startedAt,
+    completedAt,
+  }: {
+    toolId: string;
+    toolConfig: Tool;
+    toolResult?: unknown;
+    stepResults?: Array<{
+      stepId: string;
+      success: boolean;
+      data?: unknown;
+      error?: string;
+      stepFileKeys?: string[];
+    }>;
+    toolPayload?: Record<string, unknown>;
+    status: "success" | "failed" | "aborted";
+    error?: string;
+    startedAt: Date;
+    completedAt: Date;
+  }): Promise<{
+    runId: string;
+    toolId: string;
+    status: string;
+  }> {
+    return this.restRequest("POST", operationPath("legacyRuns"), {
+      toolId,
+      toolConfig,
+      toolResult,
+      stepResults,
+      toolPayload,
+      status,
+      error,
+      startedAt: startedAt.toISOString(),
+      completedAt: completedAt.toISOString(),
+    });
+  }
+
+  async extract<T = any>({
+    file,
+    envelope,
+  }: ExtractArgs): Promise<ExtractResult & { data?: T; file?: ExecutionFileEnvelope }> {
+    if (!file) {
+      throw new Error("File must be provided for extract.");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const extractUrl = new URL(`${this.apiEndpoint.replace(/\/$/, "")}/v1/extract`);
+    if (envelope) {
+      extractUrl.searchParams.set("envelope", "true");
+    }
+
+    const url = extractUrl.toString();
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = `HTTP ${response.status}: ${errorText}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error) errorMessage = errorJson.error;
+      } catch {}
+      throw new Error(errorMessage);
+    }
+
+    return response.json();
+  }
+
+  private mapOpenAPIRunToRun(openAPIRun: any): Run {
+    const statusMap: Record<string, RunStatus> = {
+      running: RunStatus.RUNNING,
+      success: RunStatus.SUCCESS,
+      failed: RunStatus.FAILED,
+      aborted: RunStatus.ABORTED,
+    };
+    return {
+      runId: openAPIRun.runId ?? openAPIRun.id,
+      toolId: openAPIRun.toolId,
+      tool: openAPIRun.tool,
+      status: statusMap[openAPIRun.status] ?? RunStatus.FAILED,
+      toolPayload: openAPIRun.toolPayload,
+      data: openAPIRun.data,
+      toolResult: openAPIRun.data,
+      error: openAPIRun.error,
+      stepResults: openAPIRun.stepResults,
+      options: openAPIRun.options,
+      requestSource: openAPIRun.requestSource,
+      traceId: openAPIRun.traceId,
+      resultStorageUri: openAPIRun.resultStorageUri,
+      userId: openAPIRun.userId,
+      userEmail: openAPIRun.userEmail,
+      userName: openAPIRun.userName,
+      metadata: openAPIRun.metadata,
+    } as Run;
+  }
+
+  async listRuns(options?: {
+    limit?: number;
+    page?: number;
+    toolId?: string;
+    search?: string;
+    searchUserIds?: string[];
+    includeTotal?: boolean;
+    startedAfter?: string | Date;
+    status?: "running" | "success" | "failed" | "aborted";
+    requestSources?: RequestSource[];
+    userId?: string;
+    systemId?: string;
+    signal?: AbortSignal;
+  }): Promise<{ items: Run[]; total: number; page: number; limit: number; hasMore: boolean }> {
+    const {
+      limit = 100,
+      page = 1,
+      toolId,
+      search,
+      searchUserIds,
+      includeTotal = true,
+      startedAfter,
+      status,
+      requestSources,
+      userId,
+      systemId,
+      signal,
+    } = options ?? {};
+    const params = new URLSearchParams({
+      limit: String(limit),
+      page: String(page),
+    });
+    if (toolId) params.set("toolId", toolId);
+    if (search?.trim()) params.set("search", search.trim());
+    if (searchUserIds && searchUserIds.length > 0) {
+      params.set("searchUserIds", searchUserIds.join(","));
+    }
+    if (!includeTotal) params.set("includeTotal", "false");
+    if (startedAfter) {
+      params.set(
+        "startedAfter",
+        startedAfter instanceof Date ? startedAfter.toISOString() : startedAfter,
+      );
+    }
+    if (status) params.set("status", status);
+    if (requestSources && requestSources.length > 0) {
+      params.set("requestSources", requestSources.join(","));
+    }
+    if (userId) params.set("userId", userId);
+    if (systemId) params.set("systemId", systemId);
+
+    const response = await this.restRequest<{
+      data: any[];
+      total: number;
+      page: number;
+      limit: number;
+      hasMore: boolean;
+    }>("GET", `${operationPath("legacyRuns")}?${params.toString()}`, undefined, undefined, {
+      signal,
+    });
+
+    return {
+      items: response.data.map((run) => this.mapOpenAPIRunToRun(run)),
+      total: response.total,
+      page: response.page,
+      limit: response.limit,
+      hasMore: response.hasMore,
+    };
+  }
+
+  async getRun(id: string): Promise<Run | null> {
+    try {
+      const response = await this.restRequest<any>("GET", operationPath("legacyRunGet", { id }));
+      return this.mapOpenAPIRunToRun(response);
+    } catch (err: any) {
+      if (err.message?.includes("404") || err.message?.includes("not found")) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  async getWorkflow(id: string): Promise<Tool | null> {
+    try {
+      return await this.restRequest<Tool>("GET", operationPath("legacyToolGet", { id }));
+    } catch (err: any) {
+      if (err.message?.includes("404") || err.message?.includes("not found")) {
+        return null;
+      }
+      if (err.message?.includes("403") || err.message?.includes("not allowed")) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  async archiveWorkflow(id: string, archived = true): Promise<Tool> {
+    return this.upsertWorkflow(id, { archived });
+  }
+
+  async listWorkflows(
+    limit = 10,
+    offset = 0,
+    includeArchived = false,
+  ): Promise<{ items: Tool[]; total: number }> {
+    const page = Math.floor(offset / limit) + 1;
+    const archiveParam = includeArchived ? "&includeArchived=true" : "";
+    const response = await this.restRequest<{
+      data: Tool[];
+      total: number;
+      page: number;
+      limit: number;
+      hasMore: boolean;
+    }>("GET", `${operationPath("listLegacyTools")}?limit=${limit}&page=${page}${archiveParam}`);
+    return { items: response.data, total: response.total };
+  }
+
+  async createWorkflow(id: string, input: Partial<Tool>): Promise<Tool> {
+    return this.restRequest<Tool>("POST", operationPath("legacyToolCreate"), { ...input, id });
+  }
+
+  async updateWorkflow(id: string, input: Partial<Tool>): Promise<Tool> {
+    return this.restRequest<Tool>("PUT", operationPath("legacyToolUpdate", { id }), input);
+  }
+
+  async upsertWorkflow(id: string, input: Partial<Tool>): Promise<Tool> {
+    // Check if tool exists to determine create vs update
+    const existing = await this.getWorkflow(id);
+    if (existing) {
+      // Update existing tool
+      return this.updateWorkflow(id, input);
+    }
+    // Create new tool
+    return this.createWorkflow(id, input);
+  }
+
+  async deleteWorkflow(id: string): Promise<boolean> {
+    try {
+      await this.restRequest<{ success: boolean }>(
+        "DELETE",
+        operationPath("legacyToolDelete", { id }),
+      );
+      return true;
+    } catch (err: any) {
+      if (err.message?.includes("404")) {
+        return false;
+      }
+      throw err;
+    }
+  }
+
+  async renameWorkflow(oldId: string, newId: string): Promise<Tool> {
+    return this.restRequest<Tool>("POST", operationPath("legacyToolRename", { id: oldId }), {
+      newId,
+    });
+  }
+
+  async listSystems(
+    limit = 10,
+    page = 1,
+    options?: { mode?: "dev" | "prod" | "all" },
+  ): Promise<{ items: System[]; total: number }> {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      page: String(page),
+    });
+    if (options?.mode) {
+      params.set("mode", options.mode);
+    }
+    const response = await this.restRequest<{
+      success: boolean;
+      data: System[];
+      total: number;
+      page: number;
+      limit: number;
+    }>("GET", `${operationPath("legacySystemsList")}?${params.toString()}`);
+    return { items: response.data, total: response.total };
+  }
+
+  async getSystem(id: string, options?: { environment?: "dev" | "prod" }): Promise<System> {
+    const queryParams = options?.environment ? `?env=${options.environment}` : "";
+    const response = await this.restRequest<{ success: boolean; data: System }>(
+      "GET",
+      `${operationPath("legacySystemGet", { id })}${queryParams}`,
+    );
+    return response.data;
+  }
+
+  async createSystem(input: {
+    id: string;
+    name: string;
+    url: string;
+    credentials?: Record<string, any>;
+    specificInstructions?: string;
+    icon?: string;
+    templateName?: string;
+    documentationFiles?: Record<string, string[]>;
+    metadata?: Record<string, any>;
+    multiTenancyMode?: string;
+    tunnel?: { tunnelId: string; targetName: string };
+    environment?: "dev" | "prod";
+  }): Promise<System> {
+    const response = await this.restRequest<{ success: boolean; data: System }>(
+      "POST",
+      operationPath("legacySystems"),
+      input,
+    );
+    return response.data;
+  }
+
+  async updateSystem(
+    id: string,
+    input: Partial<System>,
+    options?: { environment?: "dev" | "prod" },
+  ): Promise<System> {
+    const queryParams = options?.environment ? `?env=${options.environment}` : "";
+    const response = await this.restRequest<{ success: boolean; data: System }>(
+      "PATCH",
+      `${operationPath("legacySystemUpdate", { id })}${queryParams}`,
+      input,
+    );
+    return response.data;
+  }
+
+  async deleteSystem(id: string, options?: { environment?: "dev" | "prod" }): Promise<boolean> {
+    const queryParams = options?.environment ? `?env=${options.environment}` : "";
+    await this.restRequest<{ success: boolean }>(
+      "DELETE",
+      `${operationPath("legacySystemDelete", { id })}${queryParams}`,
+    );
+    return true;
+  }
+
+  async cacheOAuthSecret(args: {
+    uid: string;
+    clientId: string;
+    clientSecret: string;
+  }): Promise<boolean> {
+    await this.restRequest<{ success: boolean }>("POST", operationPath("legacyOauthSecrets"), args);
+    return true;
+  }
+
+  async getOAuthSecret(uid: string): Promise<{ client_id: string; client_secret: string }> {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: { client_id: string; client_secret: string };
+    }>("GET", operationPath("legacyOauthSecret", { uid }));
+    return response.data;
+  }
+
+  async getTemplateOAuthCredentials(
+    templateId: string,
+  ): Promise<{ client_id: string; client_secret: string }> {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: { client_id: string; client_secret: string };
+    }>("GET", operationPath("legacyOAuthTemplateCredentials", { id: templateId }));
+    return response.data;
+  }
+
+  async searchSystemDocumentation(systemId: string, keywords: string): Promise<string> {
+    const response = await this.restRequest<{ success: boolean; data: string }>(
+      "POST",
+      operationPath("legacySystemDocumentationSearch", { id: systemId }),
+      { keywords },
+    );
+    return response.data;
+  }
+
+  async cacheOauthClientCredentials(params: {
+    clientCredentialsUid: string;
+    clientId: string;
+    clientSecret: string;
+  }): Promise<{ success: boolean }> {
+    return this.restRequest<{ success: boolean }>("POST", operationPath("legacyOauthSecrets"), {
+      uid: params.clientCredentialsUid,
+      clientId: params.clientId,
+      clientSecret: params.clientSecret,
+    });
+  }
+
+  async getOAuthClientCredentials(params: {
+    templateId?: string;
+    clientCredentialsUid?: string;
+  }): Promise<{ client_id: string; client_secret: string }> {
+    if (params.clientCredentialsUid) {
+      const response = await this.restRequest<{
+        success: boolean;
+        data: { client_id: string; client_secret: string };
+      }>("GET", operationPath("legacyOauthSecret", { uid: params.clientCredentialsUid }));
+      return response.data;
+    }
+    if (!params.templateId) {
+      throw new Error("No valid credentials source provided");
+    }
+    const response = await this.restRequest<{
+      success: boolean;
+      data: { client_id: string; client_secret: string };
+    }>("GET", operationPath("legacyOAuthTemplateCredentials", { id: params.templateId }));
+    return response.data;
+  }
+
+  /**
+   * Get the CLI OAuth encryption secret and orgId.
+   * Used by CLI to encrypt API keys in OAuth state parameters.
+   */
+  async getCliOAuthSecret(): Promise<{ secret: string; orgId: string }> {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: { secret: string; orgId: string };
+    }>("GET", operationPath("legacyCliSecret"));
+    return response.data;
+  }
+
+  async triggerSystemDocumentationScrapeJob(
+    systemId: string,
+    options?: { url?: string; keywords?: string[] },
+  ): Promise<{ fileReferenceId: string; status: string }> {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: { fileReferenceId: string; status: string };
+    }>("POST", operationPath("legacySystemDocumentationScrape", { id: systemId }), options);
+    return response.data;
+  }
+
+  async fetchOpenApiSpec(
+    systemId: string,
+    url: string,
+  ): Promise<{ fileReferenceId: string; title?: string; version?: string }> {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: { fileReferenceId: string; title?: string; version?: string };
+    }>("POST", operationPath("legacySystemDocumentationOpenApi", { id: systemId }), { url });
+    return response.data;
+  }
+
+  async createSystemFileUploadUrls(
+    systemId: string,
+    files: Array<{ fileName: string; contentType?: string; contentLength?: number }>,
+  ): Promise<
+    Array<{ id: string; originalFileName: string; uploadUrl: string; expiresIn: number }>
+  > {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: {
+        files: Array<{
+          id: string;
+          originalFileName: string;
+          uploadUrl: string;
+          expiresIn: number;
+        }>;
+      };
+    }>("POST", operationPath("legacySystemFileReferencesCreate", { id: systemId }), {
+      files: files.map((f) => ({
+        fileName: f.fileName,
+        metadata: { contentType: f.contentType, contentLength: f.contentLength },
+      })),
+    });
+    return response.data.files;
+  }
+
+  async uploadSystemFileReferences(
+    systemId: string,
+    files: Array<{
+      fileName: string;
+      content: string | Uint8Array;
+      contentType?: string;
+      contentLength?: number;
+    }>,
+  ): Promise<Array<{ id: string; fileName: string }>> {
+    const uploadUrls = await this.createSystemFileUploadUrls(
+      systemId,
+      files.map((f) => ({
+        fileName: f.fileName,
+        contentType: f.contentType,
+        contentLength: f.contentLength,
+      })),
+    );
+    await Promise.all(
+      uploadUrls.map(async (fileInfo, i) => {
+        const uploadResponse = await fetch(fileInfo.uploadUrl, {
+          method: "PUT",
+          body: files[i].content as BodyInit,
+          headers: files[i].contentType ? { "Content-Type": files[i].contentType } : undefined,
+        });
+        if (!uploadResponse.ok) {
+          throw new Error(
+            `Upload failed for ${files[i].fileName}: ${uploadResponse.status} ${uploadResponse.statusText}`,
+          );
+        }
+      }),
+    );
+    return uploadUrls.map((f, i) => ({ id: f.id, fileName: files[i].fileName }));
+  }
+
+  async listSystemFileReferences(systemId: string): Promise<{
+    files: Array<{
+      id: string;
+      source: "upload" | "scrape" | "openapi";
+      status: string;
+      fileName: string;
+      sourceUrl?: string;
+      error?: string;
+      createdAt?: string;
+      contentLength?: number;
+    }>;
+  }> {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: {
+        files: Array<{
+          id: string;
+          source: "upload" | "scrape" | "openapi";
+          status: string;
+          fileName: string;
+          sourceUrl?: string;
+          error?: string;
+          createdAt?: string;
+          contentLength?: number;
+        }>;
+      };
+    }>("GET", operationPath("legacySystemFileReferencesList", { id: systemId }));
+    return response.data;
+  }
+
+  async deleteSystemFileReference(systemId: string, fileId: string): Promise<void> {
+    await this.restRequest(
+      "DELETE",
+      operationPath("legacySystemFileReferenceDelete", { systemId, fileId }),
+    );
+  }
+
+  async getFileReferenceContent(fileId: string): Promise<string | null> {
+    const response = await this.restRequest<{
+      success: boolean;
+      data: FileReference & { content?: string };
+    }>("GET", `${operationPath("legacyFileReferenceContent", { id: fileId })}?includeContent=true`);
+    return response.data.content ?? null;
+  }
+
+  /**
+   * Generate a portal link for end-user authentication.
+   * Returns a URL that can be shared with end users to authenticate with systems.
+   */
+  async getTenantInfo(): Promise<{ email: string | null; emailEntrySkipped: boolean }> {
+    return this.restRequest("GET", operationPath("getLegacyTenantInfo"));
+  }
+
+  async setTenantInfo(input: {
+    email?: string;
+    emailEntrySkipped?: boolean;
+  }): Promise<{ email: string | null; emailEntrySkipped: boolean }> {
+    return this.restRequest("PUT", operationPath("setLegacyTenantInfo"), input);
+  }
+
+  async generatePortalLink(): Promise<{ success: boolean; portalUrl?: string; error?: string }> {
+    try {
+      const result = await this.restRequest<{
+        success: boolean;
+        data: { portalUrl: string; token: string; expiresAt: string };
+      }>("POST", operationPath("legacyAuthenticate"), {});
+      return {
+        success: true,
+        portalUrl: result.data.portalUrl,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  // REST API - Tool Schedules (nested under /tools/:toolId/schedules)
+  // JSON returns dates as strings, so we parse them to Date objects
+  private parseScheduleDates(s: any): ToolSchedule {
+    return {
+      ...s,
+      lastRunAt: s.lastRunAt ? new Date(s.lastRunAt) : undefined,
+      nextRunAt: new Date(s.nextRunAt),
+      createdAt: new Date(s.createdAt),
+      updatedAt: new Date(s.updatedAt),
+    };
+  }
+
+  async listToolSchedules(toolId?: string): Promise<ToolSchedule[]> {
+    const path = toolId
+      ? operationPath("legacyToolSchedules", { id: toolId })
+      : operationPath("legacySchedules");
+    const response = await this.restRequest<{ data: any[] }>("GET", path);
+    return response.data.map((s) => this.parseScheduleDates(s));
+  }
+
+  // Summarize API - uses LLM to generate human-readable summaries
+  async summarize(prompt: string): Promise<{ summary: string; durationMs: number }> {
+    return this.restRequest<{ summary: string; durationMs: number }>(
+      "POST",
+      operationPath("legacySummarize"),
+      {
+        prompt,
+      },
+    );
+  }
+
+  async initializeUser({
+    userId,
+    email,
+    name,
+  }: {
+    userId: string;
+    email: string;
+    name?: string;
+  }): Promise<{ success: boolean; data?: { userId: string; orgId: string; email: string } }> {
+    return this.restRequest("POST", operationPath("legacyInitializeUser"), { userId, email, name });
+  }
+
+  async assignOrgRole({
+    userId,
+    orgId,
+    roleId,
+  }: {
+    userId: string;
+    orgId: string;
+    roleId: string;
+  }): Promise<{ success: boolean }> {
+    return this.restRequest("POST", operationPath("legacyAssignOrgRole"), {
+      userId,
+      orgId,
+      roleId,
+    });
+  }
+}

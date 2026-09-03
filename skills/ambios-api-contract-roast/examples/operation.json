@@ -1,0 +1,1 @@
+{"method":"POST","path":"/api/actions/{id}/approve","status":"implemented","request_schema":"ApproveActionRequest","response_schema":"ActionResponse","auth":"session","scope":["organization","workspace","role","capability"],"idempotency":"required","audit":"required","evidence":["test: approval-exact-binding","probe: authenticated deployment"]}

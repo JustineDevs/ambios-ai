@@ -1,0 +1,79 @@
+import { truncateForDisplay } from "@/lib/general-utils";
+
+const _MAX_DISPLAY_LINES = 10000;
+
+export enum TaskType {
+  STRINGIFY = "STRINGIFY",
+  COMPUTE_PREVIEW = "COMPUTE_PREVIEW",
+}
+
+export type ComputeTask =
+  | { type: TaskType.STRINGIFY; data: any }
+  | { type: TaskType.COMPUTE_PREVIEW; data: any };
+
+export interface ComputeRequest {
+  id: string;
+  task: ComputeTask;
+}
+
+export interface ComputeResponse {
+  id: string;
+  result?: any;
+  error?: string;
+}
+
+const taskHandlers: Record<TaskType, (data: any) => any> = {
+  STRINGIFY: (data: any) => {
+    return JSON.stringify(data, null, 2);
+  },
+
+  COMPUTE_PREVIEW: (data: any) => {
+    const displayData = truncateForDisplay(data);
+    const jsonString = JSON.stringify(data, null, 2);
+    const bytes = new Blob([jsonString]).size;
+
+    return {
+      displayString: displayData.value,
+      truncated: displayData.truncated,
+      bytes,
+    };
+  },
+};
+
+// Only set up message handler if we're actually in a worker context
+// @ts-expect-error - checking for WorkerGlobalScope
+if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) {
+  // Worker message handler
+  self.onmessage = (event: MessageEvent<ComputeRequest>) => {
+    // Validate message has required structure
+    if (!event.data?.id || !event.data.task) {
+      console.warn("[Worker] Received invalid message, ignoring:", event.data);
+      return;
+    }
+
+    const { id, task } = event.data;
+
+    try {
+      const handler = taskHandlers[task.type];
+      if (!handler) {
+        throw new Error(`Unknown task type: ${task.type}`);
+      }
+
+      const result = handler(task.data);
+
+      const response: ComputeResponse = {
+        id,
+        result,
+      };
+
+      self.postMessage(response);
+    } catch (error) {
+      const response: ComputeResponse = {
+        id,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+
+      self.postMessage(response);
+    }
+  };
+}

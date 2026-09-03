@@ -4,14 +4,14 @@
 
 ### 1.1 Role and Objectives
 
-You own customer success and support for AmbiOS AI.  
+You own customer success and support for AmbiOS AI.
 Your goal is simple. Help customers get value fast. Keep them successful over time. Turn issues into improvements.
 
 This document gives you the playbook. It covers onboarding, training, support, issue resolution, satisfaction tracking, and long-term engagement.
 
 ### 1.2 Customer Success Vision
 
-AmbiOS AI helps teams run safer, faster, and more visible human-and-agent workflows.  
+AmbiOS AI helps teams run safer, faster, and more visible human-and-agent workflows.
 Customers succeed when they:
 
 - Deploy the platform in their environment
@@ -473,7 +473,7 @@ Use these rules every day.
 
 ### 9.2 P1 Incident Response Template
 
-Subject: [P1] Incident impacting [customer/org]
+Subject: [P1] Incident impacting [customer-ai/org]
 
 - Impact: what is broken
 - Scope: who is affected

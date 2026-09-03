@@ -1,0 +1,121 @@
+export interface OAuthFields {
+  client_id: string;
+  client_secret: string;
+  auth_url: string;
+  token_url: string;
+  access_token: string;
+  refresh_token: string;
+  scopes: string;
+  expires_at: string;
+  expires_in: string;
+  token_type: string;
+  grant_type: "authorization_code" | "client_credentials";
+  oauth_cert: string;
+  oauth_key: string;
+}
+
+export interface SystemDefinition {
+  id: string;
+  name?: string;
+  url: string;
+  templateName?: string;
+  icon?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  tunnel?: {
+    tunnelId: string;
+    targetName: string;
+  };
+  environment?: "dev" | "prod";
+}
+
+export interface AuthState {
+  authType: "none" | "oauth" | "apikey" | "connection_string";
+  credentials: Record<string, any>;
+  oauthFields: OAuthFields;
+  apiKeyCredentials: string;
+  connectionStringCredentials: Record<string, string>;
+  isOAuthConfigured: boolean;
+  useAmbiOSOAuth: boolean;
+  multiTenancyMode: "disabled" | "enabled";
+}
+
+export interface ContextState {
+  specificInstructions: string;
+  docFileCount: number;
+}
+
+export type SystemSection = "configuration" | "authentication" | "context";
+export type OnboardingPhase = "configuration" | "authentication" | "context";
+
+export interface SectionStatus {
+  isComplete: boolean;
+  hasErrors: boolean;
+  label: string;
+}
+
+export interface PhaseCompletion {
+  configuration: boolean;
+  authentication: boolean;
+  context: boolean;
+}
+
+export interface OnboardingState {
+  isOnboarding: boolean;
+  phaseCompletion: PhaseCompletion;
+}
+
+export interface SystemConfigContextValue {
+  system: SystemDefinition;
+  auth: AuthState;
+  context: ContextState;
+
+  activeSection: SystemSection;
+  isNewSystem: boolean;
+  hasUnsavedChanges: boolean;
+  isSaving: boolean;
+  isLoading: boolean;
+
+  onboarding: OnboardingState;
+  exitOnboarding: () => void;
+
+  setSystemId: (id: string) => void;
+  setSystemName: (name: string) => void;
+  setUrl: (url: string) => void;
+  setTemplateName: (name: string) => void;
+  setIcon: (icon: string) => void;
+
+  setAuthType: (type: "none" | "oauth" | "apikey" | "connection_string") => void;
+  setCredentials: (credentials: Record<string, any>) => void;
+  setOAuthFields: (fields: Partial<OAuthFields>) => void;
+  setApiKeyCredentials: (credentials: string) => void;
+  setConnectionStringCredentials: (credentials: Record<string, string>) => void;
+  setUseAmbiOSOAuth: (use: boolean) => void;
+  setMultiTenancyMode: (mode: "disabled" | "enabled") => void;
+
+  setSpecificInstructions: (instructions: string) => void;
+  setDocFileCount: (count: number) => void;
+
+  setActiveSection: (section: SystemSection) => void;
+
+  getSectionStatus: (section: SystemSection) => SectionStatus;
+  getSystemContextForAgent: () => SystemContextForAgent;
+
+  saveSystem: (oauthTokenOverride?: Partial<OAuthFields>) => Promise<boolean>;
+  resetToInitial: () => void;
+}
+
+export interface SystemContextForAgent {
+  systemId: string;
+  url: string;
+  templateName?: string;
+  authType: "none" | "oauth" | "apikey" | "connection_string";
+  credentialKeys: string[];
+  specificInstructions: string;
+  isNewSystem: boolean;
+  sectionStatuses: {
+    configuration: { isComplete: boolean; label: string };
+    authentication: { isComplete: boolean; label: string };
+    context: { isComplete: boolean; label: string };
+  };
+}

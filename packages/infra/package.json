@@ -1,0 +1,19 @@
+{
+  "name": "@ambios-ai/infra",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --dir ../.. dev",
+    "deploy": "pnpm --dir ../.. deploy:cloudflare",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "catalog:",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ambios-ai/config": "workspace:*",
+    "wrangler": "^4.127.0",
+    "typescript": "^6.0.3"
+  }
+}

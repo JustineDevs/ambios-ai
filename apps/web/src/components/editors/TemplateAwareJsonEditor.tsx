@@ -1,0 +1,270 @@
+import { maskCredentials } from "@ambios-ai/shared";
+import Document from "@tiptap/extension-document";
+import HardBreak from "@tiptap/extension-hard-break";
+import History from "@tiptap/extension-history";
+import Paragraph from "@tiptap/extension-paragraph";
+import Text from "@tiptap/extension-text";
+import { EditorContent, useEditor } from "@tiptap/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useResizable } from "@/hooks/use-resizable";
+import { cn } from "@/lib/general-utils";
+import {
+  evaluateTemplate,
+  parseTemplateString,
+  templateStringToTiptap,
+  tiptapToTemplateString,
+} from "@/lib/templating-utils";
+import { useExecution } from "../tools/context/tool-execution-context";
+import { useTemplateAwareEditor } from "../tools/hooks/use-template-aware-editor";
+import { CopyButton } from "../tools/shared/CopyButton";
+import { TemplateEditPopover } from "../tools/templates/TemplateEditPopover";
+import { TemplateExtension } from "../tools/templates/TemplateExtension";
+import { VariableSuggestion } from "../tools/templates/TemplateVariableSuggestion";
+
+interface TemplateAwareJsonEditorProps {
+  value: string;
+  onChange?: (value: string) => void;
+  stepId: string;
+  minHeight?: string;
+  maxHeight?: string;
+  placeholder?: string;
+  resizable?: boolean;
+  showValidation?: boolean;
+  disabled?: boolean;
+}
+
+const DEBOUNCE_MS = 200;
+
+function coerceExtension(extension: unknown): any {
+  // CI can end up with multiple physical @tiptap/core installs in the workspace tree,
+  // which makes otherwise-compatible extensions fail nominal type checks.
+  return extension as any;
+}
+
+function coerceEditorOptions(options: unknown): Parameters<typeof useEditor>[0] {
+  // Cast the entire options object at the hook boundary so mixed @tiptap/core
+  // identities in CI cannot leak through nested extension arrays.
+  return options as Parameters<typeof useEditor>[0];
+}
+
+export function TemplateAwareJsonEditor({
+  value,
+  onChange,
+  stepId,
+  minHeight = "75px",
+  maxHeight = "300px",
+  placeholder = "{}",
+  resizable = false,
+  showValidation = false,
+  disabled = false,
+}: TemplateAwareJsonEditorProps) {
+  const { getStepTemplateData } = useExecution();
+  const {
+    sourceData,
+    credentials,
+    canExecute,
+    dataSelectorOutput,
+    categorizedVariables,
+    categorizedSources,
+  } = getStepTemplateData(stepId);
+
+  const isUpdatingRef = useRef(false);
+  const lastValueRef = useRef(value);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitializedRef = useRef(false);
+
+  const debouncedOnChange = useCallback(
+    (newValue: string) => {
+      if (!onChange) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => onChange(newValue), DEBOUNCE_MS);
+    },
+    [onChange],
+  );
+
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    },
+    [],
+  );
+
+  const { height: resizableHeight, resizeHandleProps } = useResizable({
+    minHeight: Number.parseInt(minHeight, 10),
+    maxHeight: Number.parseInt(maxHeight, 10),
+    initialHeight: Number.parseInt(minHeight, 10),
+  });
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  const {
+    suggestionConfig,
+    codePopoverOpen,
+    setCodePopoverOpen,
+    popoverAnchorRect,
+    handleCodeSave,
+    editorRef,
+    cleanupSuggestion,
+  } = useTemplateAwareEditor({ categorizedVariables, categorizedSources });
+
+  useEffect(() => cleanupSuggestion, [cleanupSuggestion]);
+
+  const editor = useEditor(
+    coerceEditorOptions({
+      extensions: [
+        Document,
+        Paragraph,
+        Text,
+        History,
+        HardBreak,
+        coerceExtension(TemplateExtension.configure({ stepId })),
+        coerceExtension(VariableSuggestion.configure({ suggestion: suggestionConfig })),
+      ] as unknown as Parameters<typeof useEditor>[0]["extensions"],
+      content: templateStringToTiptap(value),
+      editable: !disabled,
+      immediatelyRender: false,
+      editorProps: {
+        attributes: {
+          class: cn(
+            "w-full bg-transparent px-3 py-2 font-mono text-xs",
+            "focus:outline-none",
+            disabled && "cursor-not-allowed",
+          ),
+        },
+      },
+      onUpdate: ({ editor }) => {
+        if (isUpdatingRef.current) return;
+        // Skip the initial update that fires when the editor is created
+        if (!isInitializedRef.current) {
+          isInitializedRef.current = true;
+          // Update lastValueRef to the normalized value to prevent spurious onChange
+          lastValueRef.current = tiptapToTemplateString(editor.getJSON());
+          return;
+        }
+        const newValue = tiptapToTemplateString(editor.getJSON());
+        if (newValue !== lastValueRef.current) {
+          lastValueRef.current = newValue;
+          debouncedOnChange(newValue);
+        }
+      },
+    }) as Parameters<typeof useEditor>[0],
+  );
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor, editorRef]);
+
+  useEffect(() => {
+    if (!editor || value === lastValueRef.current) return;
+    isUpdatingRef.current = true;
+    lastValueRef.current = value;
+    // Defer to microtask to avoid flushSync during React render
+    queueMicrotask(() => {
+      editor.commands.setContent(templateStringToTiptap(value));
+      isUpdatingRef.current = false;
+    });
+  }, [editor, value]);
+
+  useEffect(() => {
+    editor?.setEditable(!disabled);
+  }, [editor, disabled]);
+
+  useEffect(() => {
+    if (!showValidation || !value?.trim()) {
+      setJsonError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const escapeForJson = (str: string) =>
+      str.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+
+    const toJsonValue = (val: unknown, isInsideQuotes: boolean): string => {
+      if (typeof val === "string") {
+        return isInsideQuotes ? escapeForJson(val) : val;
+      }
+      return JSON.stringify(val);
+    };
+
+    const validateJson = async () => {
+      let json = value;
+
+      for (const part of parseTemplateString(value)) {
+        if (cancelled) return;
+        if (part.type !== "template" || !part.rawTemplate) continue;
+
+        const expression = part.rawTemplate.slice(2, -2).trim();
+        const result = canExecute
+          ? await evaluateTemplate(expression, sourceData).catch(() => null)
+          : null;
+
+        if (cancelled) return;
+
+        const evaluated = result?.success ? result.value : null;
+        const insertPos = json.indexOf(part.rawTemplate);
+        const isInsideQuotes = insertPos > 0 && json[insertPos - 1] === '"';
+
+        json = json.replace(part.rawTemplate, toJsonValue(evaluated, isInsideQuotes));
+      }
+
+      if (cancelled) return;
+
+      try {
+        JSON.parse(json);
+        setJsonError(null);
+      } catch (e) {
+        setJsonError((e as Error).message);
+      }
+    };
+
+    const timer = setTimeout(validateJson, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [showValidation, value, sourceData, canExecute]);
+
+  return (
+    <div className={cn("relative rounded-lg border bg-muted/30 shadow-sm")}>
+      <div className="absolute top-1 right-1 z-10 mr-1">
+        <CopyButton text={value || placeholder} />
+      </div>
+      {resizable && <div {...resizeHandleProps} />}
+      <div
+        className={cn("relative", disabled ? "cursor-not-allowed" : "cursor-text")}
+        style={{
+          height: resizable ? resizableHeight : "auto",
+          minHeight,
+          maxHeight,
+          overflow: "auto",
+        }}
+      >
+        <EditorContent
+          editor={editor}
+          className={cn(resizable ? "h-full" : "", jsonError && "pb-10")}
+        />
+        {!value?.trim() && placeholder && (
+          <div className="json-placeholder-bracket pointer-events-none absolute top-2 left-3 font-mono text-xs">
+            {placeholder}
+          </div>
+        )}
+      </div>
+      {showValidation && jsonError && (
+        <div className="absolute right-0 bottom-0 left-0 z-10 max-h-24 overflow-y-auto border-t bg-destructive/10 px-3 py-2 text-destructive text-xs">
+          Error:{" "}
+          {Object.keys(credentials).length > 0
+            ? maskCredentials(jsonError, credentials)
+            : jsonError}
+        </div>
+      )}
+      <TemplateEditPopover
+        template=""
+        onSave={handleCodeSave}
+        stepId={stepId}
+        externalOpen={codePopoverOpen}
+        onExternalOpenChange={setCodePopoverOpen}
+        anchorRect={popoverAnchorRect}
+      />
+    </div>
+  );
+}

@@ -1,0 +1,3142 @@
+openapi: 3.1.0
+info:
+  title: AmbiOS AI API
+  version: 0.4.0
+  description: Generated from packages/shared/operations.ts. Do not edit route inventory by hand.
+  x-ambios-operation-registry: packages/shared/operations.ts
+servers:
+  - url: https://ambios-ai.vercel.app
+    description: Canonical Vercel same-origin gateway
+  - url: https://ambios-ai.pcg0255.workers.dev
+    description: Core API Worker
+  - url: https://ambios-ai-connector.pcg0255.workers.dev
+    description: Connector and execution Worker
+paths:
+  /:
+    x-ambios-operations:
+      - operationId: getCoreRoot
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getCoreRoot
+      summary: "Returns Core API readiness."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Health
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /.well-known/oauth-authorization-server:
+    x-ambios-operations:
+      - operationId: mcpAuthorizationMetadata
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    get:
+      operationId: mcpAuthorizationMetadata
+      summary: "Publishes MCP OAuth authorization metadata."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: McpAuthorizationServerMetadata
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /.well-known/oauth-protected-resource:
+    x-ambios-operations:
+      - operationId: mcpResourceMetadata
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    get:
+      operationId: mcpResourceMetadata
+      summary: "Publishes protected MCP resource metadata."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: McpProtectedResourceMetadata
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /.well-known/oauth-protected-resource/mcp:
+    x-ambios-operations:
+      - operationId: mcpResourceMetadataForMcp
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    get:
+      operationId: mcpResourceMetadataForMcp
+      summary: "Publishes MCP resource metadata for the resource path."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: McpProtectedResourceMetadata
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /.well-known/openai-apps-challenge:
+    x-ambios-operations:
+      - operationId: mcpChallenge
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    get:
+      operationId: mcpChallenge
+      summary: "Publishes the configured OpenAI app challenge."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Challenge
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/actions:
+    x-ambios-operations:
+      - operationId: listActions
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: listActions
+      summary: "Lists persisted actions in the workspace."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ActionList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/agent/chat:
+    x-ambios-operations:
+      - operationId: agentChat
+        runtimeOwner: core-api
+        supportedStatus: live
+    post:
+      operationId: agentChat
+      summary: "Runs the bounded agent conversation workflow."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: AgentChatStream
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/ai:
+    x-ambios-operations:
+      - operationId: getAi
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+    get:
+      operationId: getAi
+      summary: "Reserved AI endpoint; unavailable in this deployment."
+      x-runtime-owner: core-api
+      x-supported-status: unsupported
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/auth/init-oauth:
+    x-ambios-operations:
+      - operationId: initIntegrationOAuth
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+    post:
+      operationId: initIntegrationOAuth
+      summary: "Legacy browser OAuth initializer; use server-side provider connections."
+      x-runtime-owner: core-api
+      x-supported-status: unsupported
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/backend:
+    x-ambios-operations:
+      - operationId: getCoreBackendStatus
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getCoreBackendStatus
+      summary: "Returns backend configuration status."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: BackendStatus
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/backend/deploy:
+    x-ambios-operations:
+      - operationId: deployBackend
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    post:
+      operationId: deployBackend
+      summary: "Executes an approved deployment."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "deployment.execute"
+      x-idempotency: required
+      x-audit: required
+      x-queue: producer
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ExecutionResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/backend/deploy/approval:
+    x-ambios-operations:
+      - operationId: requestDeploymentApproval
+        runtimeOwner: core-api
+        supportedStatus: live
+    post:
+      operationId: requestDeploymentApproval
+      summary: "Creates exact-scope deployment approval."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Approval
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/canvas/{canvasId}:
+    x-ambios-operations:
+      - operationId: getCanvas
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getCanvas
+      summary: "Returns persisted Canvas graph data."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: CanvasGraph
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/canvas/access:
+    x-ambios-operations:
+      - operationId: getCanvasAccess
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getCanvasAccess
+      summary: "Returns authorized Canvas access metadata."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: CanvasAccess
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/canvas/realtime-token:
+    x-ambios-operations:
+      - operationId: getCanvasRealtimeToken
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getCanvasRealtimeToken
+      summary: "Returns a scoped Canvas realtime token."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: CanvasRealtimeToken
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/console:
+    x-ambios-operations:
+      - operationId: getConsole
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getConsole
+      summary: "Returns the authorized console timeline."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ConsoleTimeline
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/docs:
+    x-ambios-operations:
+      - operationId: listDocs
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: listDocs
+      summary: "Lists workspace documentation."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: DocumentList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/docs/{id}:
+    x-ambios-operations:
+      - operationId: getDoc
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getDoc
+      summary: "Returns one workspace document."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Document
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/docs/proposals:
+    x-ambios-operations:
+      - operationId: createDocProposal
+        runtimeOwner: core-api
+        supportedStatus: live
+    post:
+      operationId: createDocProposal
+      summary: "Creates a reviewable documentation proposal."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Proposal
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/extract:
+    x-ambios-operations:
+      - operationId: unsupportedExtract
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/guardrails:
+    x-ambios-operations:
+      - operationId: evaluateGuardrails
+        runtimeOwner: core-api
+        supportedStatus: live
+    post:
+      operationId: evaluateGuardrails
+      summary: "Evaluates policy before consequential work."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: GuardrailEvaluation
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/health:
+    x-ambios-operations:
+      - operationId: getHealth
+        runtimeOwner: core-api
+        supportedStatus: live
+      - operationId: getConnectorHealth
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: getHealth
+      summary: "Returns Core API health."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Health
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: getConnectorHealth
+      summary: "Returns Connector health."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Health
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/identity:
+    x-ambios-operations:
+      - operationId: getIdentity
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getIdentity
+      summary: "Returns the authorized identity."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Identity
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/incident/{id}/context:
+    x-ambios-operations:
+      - operationId: getIncidentContext
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getIncidentContext
+      summary: "Returns evidence-backed incident context."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: IncidentContext
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/incident/{id}/suggest_hotfixes:
+    x-ambios-operations:
+      - operationId: suggestHotfixes
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: suggestHotfixes
+      summary: "Returns reviewable hotfix suggestions."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: HotfixSuggestionList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/incidents:
+    x-ambios-operations:
+      - operationId: listIncidents
+        runtimeOwner: core-api
+        supportedStatus: live
+      - operationId: createIncident
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: listIncidents
+      summary: "Lists authorized incidents."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: IncidentList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createIncident
+      summary: "Creates an incident record."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Incident
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/incidents/{id}:
+    x-ambios-operations:
+      - operationId: getIncident
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getIncident
+      summary: "Returns one authorized incident."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Incident
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/incidents/hotfix:
+    x-ambios-operations:
+      - operationId: executeHotfix
+        runtimeOwner: core-api
+        supportedStatus: live
+    post:
+      operationId: executeHotfix
+      summary: "Queues an approved hotfix for connector execution and verification."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "incident.hotfix.execute"
+      x-idempotency: required
+      x-audit: required
+      x-queue: producer
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ExecutionResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/incidents/hotfix/approval:
+    x-ambios-operations:
+      - operationId: requestHotfixApproval
+        runtimeOwner: core-api
+        supportedStatus: live
+    post:
+      operationId: requestHotfixApproval
+      summary: "Creates exact-scope hotfix approval."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Approval
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations:
+    x-ambios-operations:
+      - operationId: listIntegrations
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: listIntegrations
+      summary: "Lists connection and capability status."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: IntegrationList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{provider}/*:
+    x-ambios-operations:
+      - operationId: connectorProviderAction
+        runtimeOwner: connector-execution
+        supportedStatus: live
+  /api/integrations/{providerId}:
+    x-ambios-operations:
+      - operationId: getIntegration
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getIntegration
+      summary: "Returns one persisted provider connection."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: IntegrationDetail
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{providerId}/activity:
+    x-ambios-operations:
+      - operationId: getIntegrationActivity
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getIntegrationActivity
+      summary: "Returns provider connection audit activity."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ActivityList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{providerId}/capabilities:
+    x-ambios-operations:
+      - operationId: getIntegrationCapabilities
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getIntegrationCapabilities
+      summary: "Returns persisted provider capability metadata."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderCapabilities
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{providerId}/connect:
+    x-ambios-operations:
+      - operationId: connectNango
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    post:
+      operationId: connectNango
+      summary: "Creates a provider connection through Nango."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Connection
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{providerId}/connect/status:
+    x-ambios-operations:
+      - operationId: getNangoConnect
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: getNangoConnect
+      summary: "Returns Nango connection status."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ConnectionStatus
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{providerId}/connection:
+    x-ambios-operations:
+      - operationId: disconnectIntegration
+        runtimeOwner: connector-execution
+        supportedStatus: live
+      - operationId: deleteNangoConnect
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    delete:
+      operationId: disconnectIntegration
+      summary: "Disconnects a provider connection."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: IntegrationDetail
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteNangoConnect
+      summary: "Revokes a provider connection."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Deleted
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{providerId}/resources:
+    x-ambios-operations:
+      - operationId: getIntegrationResources
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getIntegrationResources
+      summary: "Returns bounded mapped provider resources."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ResourceList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/{providerId}/verify:
+    x-ambios-operations:
+      - operationId: verifyIntegration
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    post:
+      operationId: verifyIntegration
+      summary: "Runs a safe read-only provider verification."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: IntegrationDetail
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/github/security:
+    x-ambios-operations:
+      - operationId: getGithubSecurity
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: getGithubSecurity
+      summary: "Reads GitHub security alerts by kind."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "github.security.read"
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/snyk/fix/{vulnerabilityId}:
+    x-ambios-operations:
+      - operationId: getSnykFix
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    post:
+      operationId: getSnykFix
+      summary: "Creates a governed Snyk remediation proposal; it never writes directly."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "snyk.fix"
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/snyk/scan:
+    x-ambios-operations:
+      - operationId: runSnykScan
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    post:
+      operationId: runSnykScan
+      summary: "Runs a scoped Snyk scan."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "snyk.scan"
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/snyk/vulnerabilities:
+    x-ambios-operations:
+      - operationId: getSnykVulnerabilities
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: getSnykVulnerabilities
+      summary: "Reads Snyk vulnerabilities."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "snyk.read"
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/socket/analyze:
+    x-ambios-operations:
+      - operationId: analyzeSocketPackage
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: analyzeSocketPackage
+      summary: "Reads Socket package analysis."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "socket.read"
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/socket/malware:
+    x-ambios-operations:
+      - operationId: detectSocketMalware
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: detectSocketMalware
+      summary: "Reads Socket malware analysis."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "socket.read"
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/integrations/socket/report/{projectId}:
+    x-ambios-operations:
+      - operationId: getSocketReport
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: getSocketReport
+      summary: "Reads a Socket supply-chain report."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: "socket.read"
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ProviderResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/logs/stream:
+    x-ambios-operations:
+      - operationId: streamLogs
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: streamLogs
+      summary: "Streams authorized operational log events."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: LogEventStream
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/mcp/authorize/request/{requestId}:
+    x-ambios-operations:
+      - operationId: mcpAuthorizationRequestApi
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    get:
+      operationId: mcpAuthorizationRequestApi
+      summary: "Resumes an MCP authorization request through the API proxy."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: optional
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Redirect
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/mcp/connection:
+    x-ambios-operations:
+      - operationId: getMcpConnectionState
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getMcpConnectionState
+      summary: "Returns the authenticated user's persisted MCP OAuth state."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: McpConnectionState
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/nango/webhook:
+    x-ambios-operations:
+      - operationId: nangoWebhook
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    post:
+      operationId: nangoWebhook
+      summary: "Accepts a signature-verified Nango webhook."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: producer
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: WebhookAccepted
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/oauth/secrets:
+    x-ambios-operations:
+      - operationId: unsupportedOauthSecrets
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/payments/budget:
+    x-ambios-operations:
+      - operationId: getBudget
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getBudget
+      summary: "Returns workspace budget state."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Budget
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/payments/budget/check:
+    x-ambios-operations:
+      - operationId: checkBudget
+        runtimeOwner: core-api
+        supportedStatus: live
+    post:
+      operationId: checkBudget
+      summary: "Checks budget policy."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: BudgetCheck
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/readiness:
+    x-ambios-operations:
+      - operationId: getReadiness
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getReadiness
+      summary: "Returns dependency and workspace readiness."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Readiness
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/runs:
+    x-ambios-operations:
+      - operationId: unsupportedRuns
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/schedules:
+    x-ambios-operations:
+      - operationId: unsupportedSchedules
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/summarize:
+    x-ambios-operations:
+      - operationId: unsupportedSummarize
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/sync:
+    x-ambios-operations:
+      - operationId: syncWorkspace
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    post:
+      operationId: syncWorkspace
+      summary: "Synchronizes authorized provider resources."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: producer
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: SyncResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/tools:
+    x-ambios-operations:
+      - operationId: unsupportedTools
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/trpc:
+    x-ambios-operations:
+      - operationId: getTrpc
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/tunnels:
+    x-ambios-operations:
+      - operationId: unsupportedTunnels
+        runtimeOwner: core-api
+        supportedStatus: unsupported
+  /api/workspace:
+    x-ambios-operations:
+      - operationId: getWorkspace
+        runtimeOwner: core-api
+        supportedStatus: live
+      - operationId: createWorkspace
+        runtimeOwner: core-api
+        supportedStatus: live
+    get:
+      operationId: getWorkspace
+      summary: "Returns the authorized workspace."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Workspace
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createWorkspace
+      summary: "Creates an authorized workspace."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: required
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Workspace
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /authorize:
+    x-ambios-operations:
+      - operationId: mcpAuthorize
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    get:
+      operationId: mcpAuthorize
+      summary: "Starts MCP authorization and consent."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: optional
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          description: "Registered MCP OAuth client identifier."
+          schema: { type: string, minLength: 1 }
+        - name: redirect_uri
+          in: query
+          required: true
+          description: "Exact redirect URI registered for the client."
+          schema: { type: string, format: uri }
+        - name: response_type
+          in: query
+          required: true
+          description: "OAuth response type."
+          schema: { type: string, enum: [code] }
+        - name: code_challenge
+          in: query
+          required: true
+          description: "PKCE S256 code challenge."
+          schema: { type: string, minLength: 43 }
+        - name: code_challenge_method
+          in: query
+          required: true
+          description: "PKCE challenge method."
+          schema: { type: string, enum: [S256] }
+        - name: resource
+          in: query
+          required: true
+          description: "Exact protected AmbiOS MCP resource URL."
+          schema: { type: string, format: uri }
+        - name: scope
+          in: query
+          required: true
+          description: "Space-delimited explicit AmbiOS capability scopes."
+          schema: { type: string, minLength: 1, pattern: "^[A-Za-z0-9._:-]+( [A-Za-z0-9._:-]+)*$", example: "ambios.workspace.read ambios.incidents.read" }
+        - name: state
+          in: query
+          required: false
+          description: "Opaque client state returned unchanged."
+          schema: { type: string }
+      x-mcp-resource: "https://ambios-ai.pcg0255.workers.dev/mcp"
+      x-mcp-scopes-supported: ["ambios.workspace.read","ambios.incidents.read","ambios.systems.read","ambios.resources.read","ambios.tools.read","ambios.runs.read","ambios.audit.read","ambios.proposals.create","ambios.proposals.read","ambios.policy.read","ambios.approvals.request","ambios.approvals.read","ambios.actions.read","ambios.verification.read"]
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Redirect
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /authorize/consent:
+    x-ambios-operations:
+      - operationId: mcpConsent
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    post:
+      operationId: mcpConsent
+      summary: "Records authenticated MCP consent."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Redirect
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /authorize/request/{requestId}:
+    x-ambios-operations:
+      - operationId: mcpAuthorizationRequest
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    get:
+      operationId: mcpAuthorizationRequest
+      summary: "Resumes an MCP authorization request."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: optional
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Redirect
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /health:
+    x-ambios-operations:
+      - operationId: getCoreHealth
+        runtimeOwner: core-api
+        supportedStatus: live
+      - operationId: getConnectorRootHealth
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: getCoreHealth
+      summary: "Returns Core Worker health."
+      x-runtime-owner: core-api
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Health
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: getConnectorRootHealth
+      summary: "Returns Connector Worker health."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Health
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /mcp:
+    x-ambios-operations:
+      - operationId: mcp
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+  /register:
+    x-ambios-operations:
+      - operationId: mcpRegister
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    post:
+      operationId: mcpRegister
+      summary: "Registers a public MCP OAuth client."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: McpClient
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /revoke:
+    x-ambios-operations:
+      - operationId: mcpRevoke
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    post:
+      operationId: mcpRevoke
+      summary: "Revokes the current MCP connection."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Revoked
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /token:
+    x-ambios-operations:
+      - operationId: mcpToken
+        runtimeOwner: mcp-oauth
+        supportedStatus: live
+    post:
+      operationId: mcpToken
+      summary: "Exchanges an MCP authorization code or refresh token."
+      x-runtime-owner: mcp-oauth
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: required
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: McpToken
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/authenticate:
+    x-ambios-operations:
+      - operationId: legacyAuthenticate
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyAuthenticate
+      summary: "Legacy API-key authentication compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Identity
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/file-references/{id}:
+    x-ambios-operations:
+      - operationId: legacyFileReferenceContent
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacyFileReferenceContent
+      summary: "Legacy file reference content lookup."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: FileReference
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/hooks:
+    x-ambios-operations:
+      - operationId: getLegacyHooks
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: getLegacyHooks
+      summary: "Deprecated hooks endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/internal/assignOrgRole:
+    x-ambios-operations:
+      - operationId: legacyAssignOrgRole
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyAssignOrgRole
+      summary: "Deprecated internal role assignment endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getIdentity
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/internal/initializeUser:
+    x-ambios-operations:
+      - operationId: legacyInitializeUser
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyInitializeUser
+      summary: "Deprecated internal identity initialization endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getIdentity
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/oauth/cli-secret:
+    x-ambios-operations:
+      - operationId: legacyCliSecret
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacyCliSecret
+      summary: "Deprecated CLI OAuth secret endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcpToken
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/oauth/secrets:
+    x-ambios-operations:
+      - operationId: legacyOauthSecrets
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyOauthSecrets
+      summary: "Deprecated OAuth secret endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcpToken
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/oauth/secrets/{uid}:
+    x-ambios-operations:
+      - operationId: legacyOauthSecret
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacyOauthSecret
+      summary: "Deprecated OAuth secret lookup endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcpToken
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/oauth/templates/{id}/credentials:
+    x-ambios-operations:
+      - operationId: legacyOAuthTemplateCredentials
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacyOAuthTemplateCredentials
+      summary: "Legacy OAuth template credential lookup."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: OAuthCredentials
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/runs:
+    x-ambios-operations:
+      - operationId: legacyRuns
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: getLegacyRuns
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyRuns
+      summary: "Deprecated run creation endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: listActions
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: getLegacyRuns
+      summary: "Deprecated run listing."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: listActions
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/runs/{id}:
+    x-ambios-operations:
+      - operationId: legacyRunGet
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacyRunGet
+      summary: "Legacy run lookup compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Run
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/runs/{id}/cancel:
+    x-ambios-operations:
+      - operationId: legacyRunCancel
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyRunCancel
+      summary: "Legacy run cancellation compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Run
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/schedules:
+    x-ambios-operations:
+      - operationId: legacySchedules
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacySchedules
+      summary: "Deprecated schedule listing endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: listActions
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/summarize:
+    x-ambios-operations:
+      - operationId: legacySummarize
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacySummarize
+      summary: "Deprecated summarize endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems:
+    x-ambios-operations:
+      - operationId: legacySystems
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: getLegacySystems
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: legacySystemsList
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacySystems
+      summary: "Deprecated system creation endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getWorkspace
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: getLegacySystems
+      summary: "Deprecated systems listing."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getWorkspace
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: legacySystemsList
+      summary: "Legacy systems list compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: SystemList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems/{id}:
+    x-ambios-operations:
+      - operationId: legacySystemGet
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: legacySystemUpdate
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: legacySystemDelete
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacySystemGet
+      summary: "Legacy system lookup compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: System
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: legacySystemUpdate
+      summary: "Legacy system update compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: System
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: legacySystemDelete
+      summary: "Legacy system deletion compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Success
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems/{id}/documentation/openapi:
+    x-ambios-operations:
+      - operationId: legacySystemDocumentationOpenApi
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacySystemDocumentationOpenApi
+      summary: "Legacy OpenAPI documentation import."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Job
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems/{id}/documentation/scrape:
+    x-ambios-operations:
+      - operationId: legacySystemDocumentationScrape
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacySystemDocumentationScrape
+      summary: "Legacy documentation scrape job."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Job
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems/{id}/documentation/search:
+    x-ambios-operations:
+      - operationId: legacySystemDocumentationSearch
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacySystemDocumentationSearch
+      summary: "Legacy system documentation search."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: DocumentSearchResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems/{id}/file-references:
+    x-ambios-operations:
+      - operationId: legacySystemFileReferencesCreate
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: legacySystemFileReferencesList
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacySystemFileReferencesCreate
+      summary: "Legacy file reference creation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: FileReferenceList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: legacySystemFileReferencesList
+      summary: "Legacy file reference listing."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: FileReferenceList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems/{systemId}/file-references/{fileId}:
+    x-ambios-operations:
+      - operationId: legacySystemFileReferenceDelete
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    delete:
+      operationId: legacySystemFileReferenceDelete
+      summary: "Legacy file reference deletion."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Success
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/systems/has-multi-env:
+    x-ambios-operations:
+      - operationId: getLegacyMultiEnvironment
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: getLegacyMultiEnvironment
+      summary: "Deprecated legacy environment status."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getWorkspace
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: MultiEnvironmentStatus
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tenant-info:
+    x-ambios-operations:
+      - operationId: getLegacyTenantInfo
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: setLegacyTenantInfo
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: getLegacyTenantInfo
+      summary: "Deprecated tenant information compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getWorkspace
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Workspace
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: setLegacyTenantInfo
+      summary: "Deprecated tenant information update operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getWorkspace
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Workspace
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools:
+    x-ambios-operations:
+      - operationId: legacyToolCreate
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: listLegacyTools
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyToolCreate
+      summary: "Deprecated tool creation endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: listLegacyTools
+      summary: "Deprecated legacy tool listing."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ToolList
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/{id}:
+    x-ambios-operations:
+      - operationId: legacyToolUpdate
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: legacyToolGet
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+      - operationId: legacyToolDelete
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    put:
+      operationId: legacyToolUpdate
+      summary: "Deprecated tool update endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: legacyToolGet
+      summary: "Legacy tool lookup compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Tool
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: legacyToolDelete
+      summary: "Legacy tool deletion compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Success
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/{id}/rename:
+    x-ambios-operations:
+      - operationId: legacyToolRename
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyToolRename
+      summary: "Legacy tool rename compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Tool
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/{id}/run:
+    x-ambios-operations:
+      - operationId: legacyToolRunById
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyToolRunById
+      summary: "Legacy tool execution compatibility operation."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: ToolResult
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/{id}/schedules:
+    x-ambios-operations:
+      - operationId: legacyToolSchedules
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: legacyToolSchedules
+      summary: "Deprecated tool schedule endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: listActions
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/run:
+    x-ambios-operations:
+      - operationId: legacyToolRun
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyToolRun
+      summary: "Deprecated tool execution endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/step/abort:
+    x-ambios-operations:
+      - operationId: legacyToolStepAbort
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyToolStepAbort
+      summary: "Deprecated tool step abort endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/step/run:
+    x-ambios-operations:
+      - operationId: legacyToolStepRun
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyToolStepRun
+      summary: "Deprecated tool step execution endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tools/transform/run:
+    x-ambios-operations:
+      - operationId: legacyToolTransformRun
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    post:
+      operationId: legacyToolTransformRun
+      summary: "Deprecated transform execution endpoint."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: mcp
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/tunnels:
+    x-ambios-operations:
+      - operationId: getSystemsTunnels
+        runtimeOwner: core-api
+        supportedStatus: deprecated
+    get:
+      operationId: getSystemsTunnels
+      summary: "Deprecated tunnel listing."
+      x-runtime-owner: core-api
+      x-supported-status: deprecated
+      x-authentication: required
+      x-organization-scope: true
+      x-workspace-scope: true
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: deprecated
+      x-replacement-operation: getWorkspace
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Unsupported
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Problem:
+      description: Structured problem response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              message: { type: string }
+              requestId: { type: string }

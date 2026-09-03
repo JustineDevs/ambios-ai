@@ -1,0 +1,337 @@
+import { executeWithVMHelpers, isArrowFunction } from "@ambios-ai/shared";
+import { truncateValue } from "./general-utils";
+
+export const DEFAULT_CODE_TEMPLATE = "(sourceData) => { return {} }";
+const CREDENTIAL_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*_[a-zA-Z0-9_$]+$/;
+
+export interface TemplatePart {
+  type: "text" | "template";
+  value: string;
+  start: number;
+  end: number;
+  rawTemplate?: string;
+}
+
+export interface EvaluationResult {
+  success: boolean;
+  value?: any;
+  error?: string;
+}
+
+export interface TruncatedValue {
+  display: string;
+  truncated: boolean;
+  originalSize: number;
+}
+
+export function parseTemplateString(input: string): TemplatePart[] {
+  const parts: TemplatePart[] = [];
+  const pattern = /<<([\s\S]*?)>>/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  match = pattern.exec(input);
+  while (match !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        type: "text",
+        value: input.slice(lastIndex, match.index),
+        start: lastIndex,
+        end: match.index,
+      });
+    }
+
+    parts.push({
+      type: "template",
+      value: match[1].trim(),
+      start: match.index,
+      end: match.index + match[0].length,
+      rawTemplate: match[0],
+    });
+
+    lastIndex = match.index + match[0].length;
+    match = pattern.exec(input);
+  }
+
+  if (lastIndex < input.length) {
+    parts.push({
+      type: "text",
+      value: input.slice(lastIndex),
+      start: lastIndex,
+      end: input.length,
+    });
+  }
+
+  return parts;
+}
+
+function sanitizeEvaluationResult(value: any): any {
+  if (typeof value === "function") return "[Function]";
+  if (typeof value === "symbol") return "[Symbol]";
+  if (typeof value === "bigint") return value.toString();
+
+  try {
+    JSON.stringify(value);
+    return value;
+  } catch {
+    return "[Non-serializable Object]";
+  }
+}
+
+export async function executeTemplateCode(code: string, data: any): Promise<any> {
+  try {
+    return executeWithVMHelpers(code, data);
+  } catch (error) {
+    throw new Error(
+      `Code execution failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+export async function evaluateTemplate(expr: string, sourceData: any): Promise<EvaluationResult> {
+  try {
+    const trimmed = expr.trim();
+    if (Object.hasOwn(sourceData, trimmed) && sourceData[trimmed] !== undefined) {
+      return { success: true, value: sanitizeEvaluationResult(sourceData[trimmed]) };
+    }
+    if (isArrowFunction(trimmed)) {
+      const result = await executeTemplateCode(trimmed, sourceData);
+      return { success: true, value: sanitizeEvaluationResult(result) };
+    }
+    const availableKeys = Object.keys(sourceData).slice(0, 10).join(", ");
+    const keyPreview =
+      Object.keys(sourceData).length > 10
+        ? `${availableKeys}... (${Object.keys(sourceData).length} total)`
+        : availableKeys;
+    return {
+      success: false,
+      value: undefined,
+      error: `Direct variable reference '${trimmed}' failed to resolve. Available top level keys: ${keyPreview}`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      value: undefined,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export function truncateTemplateValue(value: any, maxLength = 200): TruncatedValue {
+  let stringValue: string;
+
+  if (value === undefined) {
+    stringValue = "undefined";
+  } else if (value === null) {
+    stringValue = "null";
+  } else if (typeof value === "string") {
+    stringValue = value;
+  } else if (typeof value === "object") {
+    try {
+      stringValue = JSON.stringify(value);
+    } catch {
+      stringValue = "[Complex Object]";
+    }
+  } else {
+    stringValue = String(value);
+  }
+
+  const originalSize = stringValue.length;
+
+  if (stringValue.length <= maxLength) {
+    return {
+      display: stringValue,
+      truncated: false,
+      originalSize,
+    };
+  }
+
+  return {
+    display: `${stringValue.slice(0, maxLength)}...`,
+    truncated: true,
+    originalSize,
+  };
+}
+
+export function prepareSourceData(stepData: any, dataSelectorOutput?: any): any {
+  const base = { ...(stepData || {}) };
+
+  if (dataSelectorOutput !== undefined) {
+    base.currentItem = Array.isArray(dataSelectorOutput)
+      ? dataSelectorOutput[0]
+      : dataSelectorOutput;
+  }
+
+  return base;
+}
+
+export function formatValueForDisplay(value: any): string {
+  if (value === undefined) return "undefined";
+  if (value === null) return "null";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  try {
+    // Sample large objects/arrays before stringifying to avoid performance issues
+    const sampled = truncateValue(value, 0);
+    return JSON.stringify(sampled, null, 2);
+  } catch {
+    return "[Object]";
+  }
+}
+
+export function extractCredentials(data: Record<string, unknown>): Record<string, string> {
+  if (!data || typeof data !== "object") return {};
+  // Keys that should never be treated as credentials (context variables, etc.)
+  const nonCredentialKeys = new Set(["sg_auth_email"]);
+  return Object.entries(data).reduce(
+    (acc, [key, value]) => {
+      // Match credential-like keys (systemId_credentialKey) but exclude system URLs and context variables
+      if (
+        CREDENTIAL_PATTERN.test(key) &&
+        !key.endsWith("_url") &&
+        !nonCredentialKeys.has(key) &&
+        typeof value === "string" &&
+        value.length > 0
+      ) {
+        acc[key] = value;
+      }
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+}
+
+export interface PaginationConfig {
+  pageSize?: string;
+  cursorPath?: string;
+}
+
+export interface CategorizedVariables {
+  credentials: string[];
+  toolInputs: string[];
+  fileInputs: string[];
+  currentStepData: string[];
+  previousStepData: string[];
+  paginationVariables: string[];
+}
+
+export interface CategorizedSources {
+  manualPayload: Record<string, unknown>;
+  filePayloads: Record<string, unknown>;
+  previousStepResults: Record<string, unknown>;
+  currentItem: Record<string, unknown> | null;
+  paginationData: Record<string, unknown>;
+}
+
+export function buildPaginationData(config?: PaginationConfig): Record<string, unknown> {
+  const pageSize = config?.pageSize || "50";
+  return {
+    page: 1,
+    offset: 0,
+    cursor: `[cursor from ${config?.cursorPath || "response"} - evaluated at runtime]`,
+    limit: pageSize,
+    pageSize,
+  };
+}
+
+export function buildCategorizedVariables(
+  credentialKeys: string[],
+  sources?: Partial<CategorizedSources>,
+): CategorizedVariables {
+  return {
+    credentials: credentialKeys,
+    toolInputs: Object.keys(sources?.manualPayload || {}),
+    fileInputs: Object.keys(sources?.filePayloads || {}),
+    currentStepData: ["currentItem"],
+    previousStepData: Object.keys(sources?.previousStepResults || {}),
+    paginationVariables: ["page", "offset", "cursor", "limit", "pageSize"],
+  };
+}
+
+export function buildCategorizedSources(
+  sources?: Partial<CategorizedSources>,
+  currentItem?: Record<string, unknown> | null,
+  paginationData?: Record<string, unknown>,
+): CategorizedSources {
+  return {
+    manualPayload: sources?.manualPayload || {},
+    filePayloads: sources?.filePayloads || {},
+    previousStepResults: sources?.previousStepResults || {},
+    currentItem: currentItem || null,
+    paginationData: paginationData || {},
+  };
+}
+
+export function deriveCurrentItem(dataSelectorOutput: unknown): unknown {
+  if (Array.isArray(dataSelectorOutput)) {
+    return dataSelectorOutput.length > 0 ? dataSelectorOutput[0] : null;
+  }
+  return dataSelectorOutput;
+}
+interface TiptapJSONContent {
+  type?: string;
+  attrs?: Record<string, any>;
+  content?: TiptapJSONContent[];
+  text?: string;
+}
+
+export function templateStringToTiptap(value: string): TiptapJSONContent {
+  if (!value) {
+    return { type: "doc", content: [{ type: "paragraph" }] };
+  }
+
+  const parts = parseTemplateString(value);
+  const paragraphs: TiptapJSONContent[] = [];
+  let currentParagraph: TiptapJSONContent[] = [];
+
+  for (const part of parts) {
+    if (part.type === "text") {
+      const textLines = part.value.split("\n");
+      for (let i = 0; i < textLines.length; i++) {
+        if (textLines[i]) {
+          currentParagraph.push({ type: "text", text: textLines[i] });
+        }
+        if (i < textLines.length - 1) {
+          paragraphs.push({
+            type: "paragraph",
+            content: currentParagraph.length > 0 ? currentParagraph : undefined,
+          });
+          currentParagraph = [];
+        }
+      }
+    } else if (part.type === "template") {
+      currentParagraph.push({
+        type: "template",
+        attrs: { rawTemplate: part.rawTemplate },
+      });
+    }
+  }
+
+  paragraphs.push({
+    type: "paragraph",
+    content: currentParagraph.length > 0 ? currentParagraph : undefined,
+  });
+
+  return { type: "doc", content: paragraphs };
+}
+
+export function tiptapToTemplateString(json: TiptapJSONContent): string {
+  if (!json?.content) return "";
+
+  const lines: string[] = [];
+  for (const paragraph of json.content) {
+    if (paragraph.type === "paragraph") {
+      let line = "";
+      if (paragraph.content) {
+        for (const node of paragraph.content) {
+          if (node.type === "text") line += node.text || "";
+          else if (node.type === "template") line += node.attrs?.rawTemplate || "";
+          else if (node.type === "hardBreak") line += "\n";
+        }
+      }
+      lines.push(line);
+    }
+  }
+  return lines.join("\n");
+}

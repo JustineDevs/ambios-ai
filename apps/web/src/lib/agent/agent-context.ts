@@ -1,0 +1,738 @@
+import {
+  getDateMessage,
+  type Message,
+  type Run,
+  RunStatus,
+  type StoredRunResults,
+  type System,
+  safeStringify,
+  serviceOriginsFromEnv,
+  type Tool,
+} from "@ambios-ai/shared";
+import {
+  ACCESS_RULES_AGENT_SYSTEM_PROMPT,
+  type DeploymentEndpoints,
+  GENERAL_RULES,
+  getAmbiOSInformationPrompt,
+  MAIN_AGENT_SYSTEM_PROMPT,
+  SKILL_LOADING_INSTRUCTIONS,
+  SYSTEM_PLAYGROUND_AGENT_SYSTEM_PROMPT,
+  TOOL_PLAYGROUND_AGENT_SYSTEM_PROMPT,
+} from "./agent-prompts";
+import type {
+  DraftLookup,
+  SystemPlaygroundContext,
+  SystemPromptResult,
+  ToolExecutionContext,
+} from "./agent-types";
+
+export function findDraftInMessages(messages: Message[], draftId: string): DraftLookup | null {
+  const DRAFT_SOURCE_TOOLS = new Set(["build_tool", "edit_tool"]);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== "assistant" || !msg.parts) continue;
+
+    for (let j = msg.parts.length - 1; j >= 0; j--) {
+      const part = msg.parts[j];
+      if (part.type !== "tool" || !part.tool?.output) continue;
+      if (!DRAFT_SOURCE_TOOLS.has(part.tool.name)) continue;
+
+      const isEditTool = part.tool.name === "edit_tool";
+      if (isEditTool && part.tool.status !== "completed") {
+        continue;
+      }
+
+      try {
+        const output =
+          typeof part.tool.output === "string" ? JSON.parse(part.tool.output) : part.tool.output;
+
+        if (output.draftId === draftId && output.config) {
+          return {
+            config: output.config,
+            systemIds: output.config.systemIds || [],
+            instruction: output.config.instruction || "",
+          };
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+export const formatDiffSummary = (diff: {
+  op?: string;
+  path?: string;
+  value?: any;
+  from?: string;
+  old_string?: string;
+  new_string?: string;
+}): string => {
+  if ("old_string" in diff || "new_string" in diff) {
+    const oldPreview =
+      (diff.old_string?.length || 0) > 100
+        ? `${diff.old_string?.slice(0, 100)}...`
+        : diff.old_string || "";
+    const newPreview =
+      (diff.new_string?.length || 0) > 100
+        ? `${diff.new_string?.slice(0, 100)}...`
+        : diff.new_string || "";
+    return `"${oldPreview}" → "${newPreview}"`;
+  }
+
+  const valuePreview = diff.value
+    ? JSON.stringify(diff.value).slice(0, 80) +
+      (JSON.stringify(diff.value).length > 80 ? "..." : "")
+    : "";
+  return `[${diff.op}] ${diff.path}${valuePreview ? `: ${valuePreview}` : ""}`;
+};
+
+export function isNewConversation(messages: Array<{ role: string }>): boolean {
+  return messages.length === 1 && messages[0].role === "user";
+}
+
+export function injectContextIntoMessages(messages: Message[], context: string): Message[] {
+  if (messages.length === 0) return messages;
+  return [
+    {
+      ...messages[0],
+      content: `${context}\n\n---\nUSER MESSAGE:\n${messages[0].content}`,
+    },
+    ...messages.slice(1),
+  ];
+}
+
+export interface PlaygroundContextData {
+  toolId: string;
+  instruction: string;
+  steps: Array<{ id: string; systemId?: string; method?: string; status?: string }>;
+  hasOutputTransform: boolean;
+  hasResponseFilters: boolean;
+  inputSchemaFields: string[];
+  outputSchemaFieldCount: number;
+  transformStatus: string;
+  currentPayload: string;
+  uploadedFiles?: Array<{ name: string; key: string; status?: string }>;
+  mergedPayload?: string;
+}
+
+export const TOOL_PLAYGROUND_INIT_MARKER = "[TOOL PLAYGROUND INITIAL STATE]";
+export const SYSTEM_PLAYGROUND_INIT_MARKER = "[SYSTEM PLAYGROUND INITIAL STATE]";
+
+export function buildToolPlaygroundInitializationMessage({
+  config,
+  manualPayload,
+  mergedPayload,
+}: {
+  config: Tool;
+  manualPayload: string;
+  mergedPayload: Record<string, any>;
+}): string {
+  let parsedManualPayload: Record<string, any> | null = null;
+  let manualPayloadIsValid = false;
+
+  try {
+    const parsed = JSON.parse(manualPayload || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      parsedManualPayload = parsed;
+      manualPayloadIsValid = true;
+    }
+  } catch {}
+
+  const manualKeys = Object.keys(parsedManualPayload || {});
+  const mergedKeys = Object.keys(mergedPayload || {});
+  const hasAdditionalMergedKeys = mergedKeys.some((key) => !manualKeys.includes(key));
+  const hasOverriddenKeys = manualKeys.some(
+    (key) =>
+      key in (mergedPayload || {}) &&
+      JSON.stringify(parsedManualPayload?.[key]) !== JSON.stringify(mergedPayload?.[key]),
+  );
+  const shouldIncludeManualPayload =
+    !manualPayloadIsValid || hasAdditionalMergedKeys || hasOverriddenKeys;
+
+  return `${TOOL_PLAYGROUND_INIT_MARKER}
+Initial tool editor snapshot for this conversation. Use inspect_tool if you need refreshed state.
+
+CONFIG:
+\`\`\`json
+${safeStringify(config, 2)}
+\`\`\`
+
+MERGED PAYLOAD:
+\`\`\`json
+${safeStringify(mergedPayload || {}, 2)}
+\`\`\`${shouldIncludeManualPayload ? `\n\nMANUAL PAYLOAD:\n\`\`\`\n${manualPayload || "{}"}\n\`\`\`` : ""}`;
+}
+
+export function buildSystemPlaygroundInitializationMessage(
+  systemConfig: SystemPlaygroundContext,
+): string {
+  return `${SYSTEM_PLAYGROUND_INIT_MARKER}
+Initial system editor snapshot for this conversation. Use inspect_system if you need refreshed state.
+
+STATE:
+\`\`\`json
+${safeStringify(systemConfig, 2)}
+\`\`\``;
+}
+
+async function getToolsForContext(ctx: ToolExecutionContext) {
+  try {
+    const { items } = await ctx.ambiosClient.listWorkflows(1000);
+
+    if (items.length === 0) {
+      return {
+        success: true,
+        tools: [],
+        toolIds: [],
+      };
+    }
+
+    const toolsSummary = items.map((t: any) => ({
+      id: t.id,
+      instruction: t.instruction?.substring(0, 100) || "",
+    }));
+
+    return {
+      success: true,
+      toolIds: items.map((t: any) => t.id),
+      tools: toolsSummary,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      tools: [],
+      toolIds: [],
+      error: error.message,
+    };
+  }
+}
+
+async function getSystemsForContext(ctx: ToolExecutionContext) {
+  try {
+    // Use prod mode by default - shows prod systems + standalone dev systems
+    const result = await ctx.ambiosClient.listSystems(1000, 1, { mode: "prod" });
+
+    const systemsSummary = result.items.map((system: any) => ({
+      id: system?.id,
+      name: system?.name || system?.id,
+    }));
+
+    return {
+      success: true,
+      systems: systemsSummary,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      systems: [],
+      error: error.message,
+    };
+  }
+}
+
+function getDeploymentEndpoints(): DeploymentEndpoints {
+  const apiEndpoint = process.env.API_ENDPOINT || serviceOriginsFromEnv(process.env).coreApiOrigin;
+  const appEndpoint =
+    process.env.AMBIOS_APP_URL || serviceOriginsFromEnv(process.env).frontendOrigin;
+  return { apiEndpoint, appEndpoint };
+}
+
+export async function generateMainAgentSystemPrompt(
+  ctx: ToolExecutionContext,
+): Promise<SystemPromptResult> {
+  const [toolsResult, systemsResult] = await Promise.all([
+    getToolsForContext(ctx),
+    getSystemsForContext(ctx),
+  ]);
+
+  const dateMessage = getDateMessage();
+  const endpoints = getDeploymentEndpoints();
+
+  const content = `${MAIN_AGENT_SYSTEM_PROMPT}
+
+[GENERAL INFORMATION]
+${getAmbiOSInformationPrompt(endpoints)}
+
+AVAILABLE SYSTEMS: ${JSON.stringify(systemsResult.systems || [])}
+
+AVAILABLE TOOLS: ${JSON.stringify(toolsResult.tools || [])}
+
+${dateMessage.content}`;
+  return { content };
+}
+
+export async function generatePlaygroundSystemPrompt(
+  _ctx: ToolExecutionContext,
+): Promise<SystemPromptResult> {
+  const dateMessage = getDateMessage();
+
+  const content = `${TOOL_PLAYGROUND_AGENT_SYSTEM_PROMPT}
+
+${GENERAL_RULES}
+${SKILL_LOADING_INSTRUCTIONS}
+
+${dateMessage.content}`;
+
+  return { content };
+}
+
+export async function generateSystemPlaygroundSystemPrompt(
+  _ctx: ToolExecutionContext,
+): Promise<SystemPromptResult> {
+  const dateMessage = getDateMessage();
+  const content = `${SYSTEM_PLAYGROUND_AGENT_SYSTEM_PROMPT}
+
+${GENERAL_RULES}
+${SKILL_LOADING_INSTRUCTIONS}
+
+${dateMessage.content}`;
+
+  return { content };
+}
+
+export async function generateAccessRulesSystemPrompt(
+  ctx: ToolExecutionContext,
+): Promise<SystemPromptResult> {
+  const dateMessage = getDateMessage();
+  const arc = ctx.accessRulesContext;
+
+  let roleContext = "";
+  if (arc) {
+    roleContext = `
+CURRENT ROLE: ${arc.role.name} (id: ${arc.role.id})
+${arc.role.isBaseRole ? `This is a base role (${arc.role.id === "admin" ? "immutable" : "tool and system permissions are editable, name and description are not"}).` : "This is a custom role."}
+${arc.isEditing ? "Edit mode is active." : "Read-only mode — the user must click Edit to enable changes."}
+`;
+  }
+
+  const content = `${ACCESS_RULES_AGENT_SYSTEM_PROMPT}
+
+${GENERAL_RULES}
+${SKILL_LOADING_INSTRUCTIONS}
+
+${roleContext}
+${dateMessage.content}`;
+
+  return { content };
+}
+
+export function getDiscoveryContext(systemIds: string[]): string {
+  const isSingleIntegration = systemIds.length === 1;
+  const systemList = systemIds.join(", ");
+
+  if (isSingleIntegration) {
+    return `You are helping a user set up and test a single integration: ${systemList}
+
+CONTEXT:
+The user wants to configure and test this integration before building tools with it. Focus on:
+- Understanding what this integration can do
+- Verifying credentials and authentication are working
+- Testing API endpoints to confirm connectivity
+- Building a first simple tool to demonstrate the integration works
+
+INSTRUCTIONS:
+1. Start by using search_documentation for ${systemList} to understand its capabilities in depth
+2. Check the system's current configuration - what's already set up vs missing
+3. Guide the user through any missing configuration (credentials, endpoints, etc.)
+4. Test connectivity by making a simple API call
+5. Help build a basic "hello world" tool to prove the integration is working
+
+TONE:
+Be thorough and methodical. This is about getting the foundation right before building more complex tools.
+Focus on: "Let's make sure ${systemList} is fully configured and working."
+
+ADDITIONAL CAPABILITIES TO MENTION:
+- You can test API endpoints to verify the system is working
+- You can search external documentation if the system docs are incomplete
+- If the user has existing scripts or workflows, they can upload them to recreate as ambios tools
+
+Be conversational and helpful. The goal is a working, tested integration.`;
+  }
+
+  return `You are helping a user build tools that connect multiple systems: ${systemList}
+
+CONTEXT:
+The user has ${systemIds.length} integrations they want to use together. Focus on:
+- Understanding how these systems can work together
+- Identifying data flows and integration patterns between them
+- Building tools that leverage multiple systems
+
+INSTRUCTIONS:
+1. Start by using search_documentation for each system (${systemList}) to understand their capabilities
+2. Identify potential connection points - what data can flow between these systems?
+3. Suggest practical tool ideas that combine multiple systems
+4. Help build tools that demonstrate the systems working together
+
+TOOL SUGGESTIONS - IMPORTANT:
+Your tool suggestions MUST be grounded in what the documentation actually describes. Focus on:
+- Specific API endpoints and their documented purposes
+- How data from one system could be used by another
+- Documented use cases, workflows, or integration patterns
+- Technical capabilities like webhooks, batch operations, or sync features
+
+Only suggest speculative combinations if the documentation provides little actionable information. When documentation is rich, stick closely to documented capabilities.
+
+TONE:
+Be creative but practical. This is about discovering valuable integrations between systems.
+Focus on: "Here's what you can do with ${systemList} together."
+
+ADDITIONAL CAPABILITIES TO MENTION:
+- If the user has existing workflows (Python scripts, n8n flows, Zapier zaps), they can upload the code and you can help recreate it
+- You can test API endpoints to verify the systems are working before building tools
+- You can search external documentation if the system docs are incomplete
+
+Be conversational and helpful. Guide them toward building useful tools that leverage their systems together.`;
+}
+
+export function getDiscoveryPrompts(systemIds: string[]): {
+  hiddenStarterMessage: string;
+  userPrompt: string;
+} {
+  const isSingleIntegration = systemIds.length === 1;
+  const systemList = systemIds.join(", ");
+
+  const hiddenStarterMessage = getDiscoveryContext(systemIds);
+
+  const userPrompt = isSingleIntegration
+    ? `I want to set up and test ${systemList}. Help me configure it and build a simple tool to verify it's working.`
+    : `I want to build tools using ${systemList}. What can I do with them together?`;
+
+  return { hiddenStarterMessage, userPrompt };
+}
+
+export interface ToolBuilderPrompt {
+  userPrompt: string;
+  hiddenStarterMessage: string;
+  chatTitle: string;
+  chatIcon?: string;
+}
+
+const normalizeSystemIds = (systemIds?: string[]): string[] => {
+  if (!systemIds) return [];
+  return systemIds.map((id) => id.trim()).filter(Boolean);
+};
+
+export function getToolBuilderPrompts({
+  systemIds,
+  systems = [],
+}: {
+  systemIds?: string[];
+  systems?: System[];
+}): ToolBuilderPrompt {
+  const normalizedIds = normalizeSystemIds(systemIds);
+  const matchedSystems = systems.filter((system) => normalizedIds.includes(system.id));
+  const resolvedIds = normalizedIds.length > 0 ? normalizedIds : matchedSystems.map((s) => s.id);
+  const hasSystems = resolvedIds.length > 0;
+
+  const systemLabel = hasSystems ? resolvedIds.join(", ") : "your systems";
+  const userPrompt = hasSystems
+    ? `I want to build a tool with ${systemLabel}.`
+    : "I want to build a tool.";
+
+  const hiddenStarterMessage = hasSystems
+    ? `The user opened the build-tool flow for these systems: ${systemLabel}.
+Focus the tool-building flow on these systems unless the user explicitly changes scope.`
+    : "The user opened the generic build-tool flow without preselected systems.";
+
+  return {
+    userPrompt,
+    hiddenStarterMessage,
+    chatTitle: "Build tool",
+    chatIcon: matchedSystems.length === 1 ? matchedSystems[0].icon : undefined,
+  };
+}
+
+export function getInvestigationPrompts(
+  run: Run,
+  storedResults?: StoredRunResults | null,
+): {
+  hiddenStarterMessage: string;
+  userPrompt: string;
+} {
+  const formatDate = (dateStr: string | undefined): string => {
+    if (!dateStr) return "unknown";
+    try {
+      return new Date(dateStr).toLocaleString();
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Determine run status
+  const isFailed =
+    run.status === RunStatus.FAILED || run.status?.toString().toUpperCase() === "FAILED";
+  const isSuccess =
+    run.status === RunStatus.SUCCESS || run.status?.toString().toUpperCase() === "SUCCESS";
+  const isRunning =
+    run.status === RunStatus.RUNNING || run.status?.toString().toUpperCase() === "RUNNING";
+  const isAborted =
+    run.status === RunStatus.ABORTED || run.status?.toString().toUpperCase() === "ABORTED";
+
+  // Use stored results if available, otherwise fall back to run data
+  const stepResults = storedResults?.stepResults ?? run.stepResults;
+  const toolPayload = storedResults?.toolPayload ?? run.toolPayload;
+  const toolResult = storedResults?.data ?? run.data;
+  const _hasStoredResults = !!storedResults;
+
+  // Check if tool exists and version info
+  const toolExists = !!run.tool;
+  const runToolVersion = run.tool?.version;
+  const runStartedAt = formatDate(run.metadata?.startedAt);
+
+  // Build tool existence section (only relevant for failed runs needing fixes)
+  let toolExistenceSection = "";
+  if (isFailed && !toolExists) {
+    toolExistenceSection = `
+IMPORTANT - TOOL NOT FOUND:
+The tool "${run.toolId}" does not currently exist in the system. This could be because:
+1. The tool was deleted after this run
+2. The tool was only a draft created by the agent and was never saved
+
+Since the tool doesn't exist, you CANNOT use edit_tool to modify it. Instead:
+- If the user wants to recreate the tool, use build_tool to create a new one that addresses the error
+- If this was a draft from a previous agent conversation, suggest the user go back to that chat (this run was from: ${runStartedAt})
+
+BEFORE taking any action, explain the situation to the user and ask what they would like to do:
+1. Create a new tool based on what we know from this failed run
+2. Go back to the original conversation where the tool was built
+3. Something else
+
+Do NOT start creating or editing tools without user confirmation.
+`;
+  }
+
+  // Build version comparison section
+  let versionSection = "";
+  if (toolExists && runToolVersion) {
+    versionSection = `
+VERSION INFORMATION:
+- Tool version at time of this run: ${runToolVersion}
+- Run timestamp: ${runStartedAt}
+
+${
+  isFailed
+    ? `IMPORTANT: Before analyzing the error, use get_tool to fetch the current saved version of "${run.toolId}".
+Compare the current version with the version from this run (${runToolVersion}).
+If the versions differ:
+1. Identify what changed between versions
+2. Determine if the changes might have fixed or could fix the error we're seeing
+3. Let the user know they're looking at an old run and the tool has been updated since
+4. Analyze whether the current version would still have this issue`
+    : `You can use get_tool to fetch the current version of "${run.toolId}" if needed for comparison.`
+}
+`;
+  }
+
+  // Build request source section
+  let requestSourceSection = "";
+  if (run.requestSource === "webhook") {
+    requestSourceSection = isFailed
+      ? `
+WEBHOOK TRIGGER ANALYSIS:
+This run was triggered by a webhook. When debugging webhook-triggered runs:
+1. Carefully examine the INPUT PAYLOAD below - this is what the webhook sent
+2. Check if the payload structure matches what the tool's inputSchema expects
+3. Look for missing required fields, incorrect data types, or unexpected values
+4. The webhook sender may be sending data in a different format than expected
+5. Test the tool with the exact payload to reproduce the issue
+6. If the payload is the problem, either:
+   - Update the tool's inputSchema and steps to handle the actual webhook format
+   - Or coordinate with the webhook sender to fix their payload format
+`
+      : `
+WEBHOOK TRIGGER:
+This run was triggered by a webhook. The INPUT PAYLOAD shows what the webhook sent.
+`;
+  } else if (run.requestSource === "scheduler") {
+    requestSourceSection = isFailed
+      ? `
+SCHEDULED RUN ANALYSIS:
+This run was triggered by the scheduler. Consider:
+1. Check if any external dependencies (APIs, services) were unavailable at the scheduled time
+2. Look for rate limiting issues if this runs frequently
+3. Check if credentials or tokens may have expired
+`
+      : `
+SCHEDULED RUN:
+This run was triggered by the scheduler.
+`;
+  } else if (run.requestSource === "tool-chain") {
+    requestSourceSection = isFailed
+      ? `
+TOOL CHAIN ANALYSIS:
+This run was triggered as part of a tool chain. Consider:
+1. Check if the input from the previous tool in the chain was in the expected format
+2. Look at the INPUT PAYLOAD to see what was passed from the upstream tool
+3. The error might be in the upstream tool's output rather than this tool's configuration
+`
+      : `
+TOOL CHAIN:
+This run was triggered as part of a tool chain. The INPUT PAYLOAD shows what was passed from the upstream tool.
+`;
+  }
+
+  // Build status-specific intro and approach
+  let statusIntro: string;
+  let approachSection: string;
+
+  if (isFailed) {
+    statusIntro = `You are helping debug a failed ambios tool run. Analyze the error and help the user fix it.
+
+FAILED RUN DETAILS:
+- Run ID: ${run.runId}
+- Tool ID: ${run.toolId}
+- Status: FAILED
+- Error: ${run.error || "Unknown error"}
+- Triggered by: ${run.requestSource || "unknown"}
+- Duration: ${run.metadata?.durationMs ? `${run.metadata.durationMs}ms` : "unknown"}
+- Started: ${runStartedAt}
+- Completed: ${formatDate(run.metadata?.completedAt)}`;
+
+    approachSection = `YOUR APPROACH:
+1. First, explain the error in plain English - what went wrong and why
+2. ${toolExists ? "Check the current tool version and compare with the run version" : "Acknowledge the tool doesn't exist and ask user how to proceed"}
+3. Identify the root cause - is it a configuration issue, payload issue, external API issue, or transient error?
+4. Provide a specific solution with concrete steps
+5. ${toolExists ? "Offer to modify the tool using edit_tool if needed" : "Offer to create a new tool using build_tool if the user wants"}
+
+IMPORTANT GUIDELINES:
+- Always explain the situation clearly before taking action
+- Ask for user confirmation before creating new tools or making significant changes
+- If this is a transient issue (timeout, rate limit), suggest retrying before making changes
+- Be specific about what needs to change and where`;
+  } else if (isSuccess) {
+    statusIntro = `You are helping the user understand a successful ambios tool run. Analyze the execution and results.
+
+SUCCESSFUL RUN DETAILS:
+- Run ID: ${run.runId}
+- Tool ID: ${run.toolId}
+- Status: SUCCESS
+- Triggered by: ${run.requestSource || "unknown"}
+- Duration: ${run.metadata?.durationMs ? `${run.metadata.durationMs}ms` : "unknown"}
+- Started: ${runStartedAt}
+- Completed: ${formatDate(run.metadata?.completedAt)}`;
+
+    approachSection = `YOUR APPROACH:
+1. Summarize what the tool did and what results it produced
+2. Explain the step-by-step execution flow if step results are available
+3. Highlight any interesting data transformations or API calls
+4. Answer any questions the user has about the execution or results
+5. Offer to help optimize or modify the tool if needed
+
+IMPORTANT GUIDELINES:
+- Focus on explaining what happened and the results
+- Be ready to help with follow-up questions about the data
+- If the user wants to modify the tool, use edit_tool`;
+  } else if (isRunning) {
+    statusIntro = `You are helping the user understand a currently running ambios tool. Note that this run is still in progress.
+
+RUNNING RUN DETAILS:
+- Run ID: ${run.runId}
+- Tool ID: ${run.toolId}
+- Status: RUNNING (in progress)
+- Triggered by: ${run.requestSource || "unknown"}
+- Started: ${runStartedAt}`;
+
+    approachSection = `YOUR APPROACH:
+1. Note that this run is still in progress
+2. Explain what information is available so far
+3. Suggest the user refresh or check back later for complete results
+4. Answer any questions about the tool configuration or expected behavior`;
+  } else if (isAborted) {
+    statusIntro = `You are helping the user understand an aborted ambios tool run.
+
+ABORTED RUN DETAILS:
+- Run ID: ${run.runId}
+- Tool ID: ${run.toolId}
+- Status: ABORTED
+- Triggered by: ${run.requestSource || "unknown"}
+- Duration: ${run.metadata?.durationMs ? `${run.metadata.durationMs}ms` : "unknown"}
+- Started: ${runStartedAt}
+- Aborted: ${formatDate(run.metadata?.completedAt)}`;
+
+    approachSection = `YOUR APPROACH:
+1. Explain that the run was aborted (manually stopped or timed out)
+2. Show what progress was made before the abort if step results are available
+3. Help the user understand if they should retry or if there's an issue to fix
+4. Answer any questions about why the run might have been aborted`;
+  } else {
+    statusIntro = `You are helping the user understand a ambios tool run.
+
+RUN DETAILS:
+- Run ID: ${run.runId}
+- Tool ID: ${run.toolId}
+- Status: ${run.status || "unknown"}
+- Triggered by: ${run.requestSource || "unknown"}
+- Duration: ${run.metadata?.durationMs ? `${run.metadata.durationMs}ms` : "unknown"}
+- Started: ${runStartedAt}
+- Completed: ${formatDate(run.metadata?.completedAt)}`;
+
+    approachSection = `YOUR APPROACH:
+1. Summarize the run and its results
+2. Answer any questions the user has
+3. Offer to help with modifications if needed`;
+  }
+
+  const hiddenStarterMessage = `${statusIntro}
+${toolExistenceSection}${versionSection}${requestSourceSection}
+${
+  run.tool
+    ? `TOOL CONFIGURATION (from time of run):
+${safeStringify(run.tool)}`
+    : "NO TOOL CONFIGURATION AVAILABLE - The tool was not saved or has been deleted."
+}
+
+${
+  stepResults
+    ? `STEP RESULTS:
+${safeStringify(stepResults)}`
+    : ""
+}
+
+${
+  toolResult
+    ? `TOOL OUTPUT:
+${safeStringify(toolResult)}`
+    : ""
+}
+
+${
+  toolPayload
+    ? `INPUT PAYLOAD:
+${safeStringify(toolPayload)}`
+    : ""
+}
+
+${approachSection}`;
+
+  // Build user prompt based on status
+  let userPrompt: string;
+  if (isFailed) {
+    const errorPreview = run.error ? run.error.substring(0, 150) : "Unknown error";
+    const toolExistsNote = toolExists ? "" : "\n\nNote: This tool no longer exists in the system.";
+    userPrompt = `Help me investigate why my "${run.toolId}" tool failed.
+
+Error: ${errorPreview}${run.error && run.error.length > 150 ? "..." : ""}
+
+What went wrong and how can I fix it?${toolExistsNote}`;
+  } else if (isSuccess) {
+    userPrompt = `Help me understand this successful run of my "${run.toolId}" tool.
+
+What did it do and what were the results?`;
+  } else if (isRunning) {
+    userPrompt = `Help me understand this currently running execution of my "${run.toolId}" tool.
+
+What's happening and what should I expect?`;
+  } else if (isAborted) {
+    userPrompt = `Help me understand why my "${run.toolId}" tool run was aborted.
+
+What happened and should I retry?`;
+  } else {
+    userPrompt = `Help me understand this run of my "${run.toolId}" tool.
+
+What happened during this execution?`;
+  }
+
+  return { hiddenStarterMessage, userPrompt };
+}

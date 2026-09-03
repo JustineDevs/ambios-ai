@@ -1,0 +1,34 @@
+name = "ambios-ai"
+main = "src/worker.ts"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+ENVIRONMENT = "production"
+NEXT_PUBLIC_SERVER_URL = "https://ambios.ai"
+MCP_AUTHORIZATION_SERVER_URL = "https://ambios-ai.pcg0255.workers.dev"
+MCP_AUTH_UI_URL = "https://ambios-ai.vercel.app/mcp/authorize"
+MCP_RESOURCE_URL = "https://ambios-ai.pcg0255.workers.dev/mcp"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ambios-core"
+database_id = "af5cffd2-c4bd-441d-a312-3e3f9de657a8"
+migrations_dir = "packages/db/migrations"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "27a4c858885a4a9483044c8f39bf38e8"
+preview_id = "2228f626fc0c4bf2a074766bf0457310"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "ambios-artifacts"
+
+[[queues.producers]]
+binding = "QUEUE"
+queue = "ambios-jobs"

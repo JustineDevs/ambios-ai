@@ -1,0 +1,22 @@
+{
+  "name": "@ambios-ai/env",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./server": "./src/server.ts",
+    "./web": "./src/web.ts"
+  },
+  "dependencies": {
+    "@t3-oss/env-core": "^0.13.11",
+    "dotenv": "catalog:",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@ambios-ai/config": "workspace:*",
+    "@ambios-ai/infra": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,7 @@
+interface:
+  display_name: AmbiOS UI Truthful State
+  short_description: Audit real pages, layout, accessibility, and workflow states
+  default_prompt: >-
+    Use $ambios-ui-truthful-state to exercise every affected route in a real
+    browser, identify visual and behavioral drift, repair the canonical UI, and
+    verify each state with interaction evidence.

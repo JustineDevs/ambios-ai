@@ -1,0 +1,174 @@
+import type { ExecutionFileEnvelope } from "@ambios-ai/shared";
+import { useCallback, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  formatBytes,
+  generateUniqueKey,
+  MAX_TOTAL_FILE_SIZE_TOOLS,
+  processAndExtractFile,
+  sanitizeFileName,
+  type UploadedFileInfo,
+} from "@/lib/file-utils";
+import { removeFileKeysFromPayload } from "@/lib/general-utils";
+import { useAmbiOSClient } from "@/queries/use-client";
+
+interface UseFileUploadOptions {
+  maxTotalSize?: number;
+  onFilesChange?: (
+    files: UploadedFileInfo[],
+    payloads: Record<string, ExecutionFileEnvelope>,
+  ) => void;
+  onPayloadTextUpdate?: (updater: (prev: string) => string) => void;
+  onUserEdit?: () => void;
+  externalFiles?: UploadedFileInfo[];
+  externalPayloads?: Record<string, ExecutionFileEnvelope>;
+}
+
+interface UseFileUploadReturn {
+  uploadedFiles: UploadedFileInfo[];
+  filePayloads: Record<string, ExecutionFileEnvelope>;
+  totalFileSize: number;
+  isProcessing: boolean;
+  uploadFiles: (files: File[]) => Promise<void>;
+  removeFile: (key: string) => void;
+  setUploadedFiles: (files: UploadedFileInfo[]) => void;
+  setFilePayloads: (payloads: Record<string, ExecutionFileEnvelope>) => void;
+}
+
+export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUploadReturn {
+  const {
+    maxTotalSize = MAX_TOTAL_FILE_SIZE_TOOLS,
+    onFilesChange,
+    onPayloadTextUpdate,
+    onUserEdit,
+    externalFiles,
+    externalPayloads,
+  } = options;
+
+  const createClient = useAmbiOSClient();
+  const { toast } = useToast();
+
+  const [localUploadedFiles, setLocalUploadedFiles] = useState<UploadedFileInfo[]>([]);
+  const [localFilePayloads, setLocalFilePayloads] = useState<Record<string, ExecutionFileEnvelope>>(
+    {},
+  );
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const uploadedFiles = externalFiles ?? localUploadedFiles;
+  const filePayloads = externalPayloads ?? localFilePayloads;
+  const setUploadedFiles = setLocalUploadedFiles;
+  const setFilePayloads = setLocalFilePayloads;
+
+  const totalFileSize = uploadedFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      setIsProcessing(true);
+      onUserEdit?.();
+
+      try {
+        const newSize = files.reduce((sum, f) => sum + f.size, 0);
+        if (totalFileSize + newSize > maxTotalSize) {
+          toast({
+            title: "Size limit exceeded",
+            description: `Total file size cannot exceed ${formatBytes(maxTotalSize)}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const existingKeys = uploadedFiles.map((f) => f.key);
+        const newFiles: UploadedFileInfo[] = [];
+        const newPayloads: Record<string, ExecutionFileEnvelope> = { ...filePayloads };
+        const keysToRemove: string[] = [];
+
+        for (const file of files) {
+          const baseKey = sanitizeFileName(file.name, { removeExtension: true, lowercase: false });
+          const key = generateUniqueKey(baseKey, [...existingKeys, ...newFiles.map((f) => f.key)]);
+
+          const fileInfo: UploadedFileInfo = {
+            name: file.name,
+            size: file.size,
+            originalSize: file.size,
+            contentType: file.type || "application/octet-stream",
+            key,
+            status: "processing",
+          };
+          newFiles.push(fileInfo);
+          existingKeys.push(key);
+
+          try {
+            const client = createClient();
+            const envelope = await processAndExtractFile(file, client);
+
+            newPayloads[key] = envelope;
+            fileInfo.status = "ready";
+            keysToRemove.push(key);
+          } catch (error: any) {
+            fileInfo.status = "error";
+            fileInfo.error = error.message;
+
+            toast({
+              title: "File processing failed",
+              description: `Failed to parse ${file.name}: ${error.message}`,
+              variant: "destructive",
+            });
+          }
+        }
+
+        const finalFiles = [...uploadedFiles, ...newFiles];
+
+        if (onFilesChange) {
+          onFilesChange(finalFiles, newPayloads);
+        } else {
+          setUploadedFiles(finalFiles);
+          setFilePayloads(newPayloads);
+        }
+
+        if (keysToRemove.length > 0 && onPayloadTextUpdate) {
+          onPayloadTextUpdate((prev) => removeFileKeysFromPayload(prev, keysToRemove));
+        }
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [
+      uploadedFiles,
+      filePayloads,
+      totalFileSize,
+      maxTotalSize,
+      createClient,
+      toast,
+      onFilesChange,
+      onPayloadTextUpdate,
+      onUserEdit,
+    ],
+  );
+
+  const removeFile = useCallback(
+    (key: string) => {
+      const newFiles = uploadedFiles.filter((f) => f.key !== key);
+      const newPayloads = { ...filePayloads };
+      delete newPayloads[key];
+
+      if (onFilesChange) {
+        onFilesChange(newFiles, newPayloads);
+      } else {
+        setUploadedFiles(newFiles);
+        setFilePayloads(newPayloads);
+      }
+    },
+    [uploadedFiles, filePayloads, onFilesChange],
+  );
+
+  return {
+    uploadedFiles,
+    filePayloads,
+    totalFileSize,
+    isProcessing,
+    uploadFiles,
+    removeFile,
+    setUploadedFiles,
+    setFilePayloads,
+  };
+}

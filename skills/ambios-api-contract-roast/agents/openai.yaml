@@ -1,0 +1,7 @@
+interface:
+  display_name: AmbiOS API Contract Roast
+  short_description: Find and repair operation-level API drift
+  default_prompt: >-
+    Use $ambios-api-contract-roast to map every API operation to its real route,
+    schema, scope checks, persistence, tests, and deployed evidence. Repair every
+    confirmed mismatch without hiding unsupported behavior.

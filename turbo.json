@@ -1,0 +1,68 @@
+{
+  "globalEnv": ["CLOUDFLARE_WORKER_GZIP_LIMIT_MIB"],
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalPassThroughEnv": [
+    "TEST_ENVIRONMENT",
+    "FRONTEND_ORIGIN",
+    "CORE_API_ORIGIN",
+    "CONNECTOR_API_ORIGIN",
+    "MCP_RESOURCE_URL",
+    "OAUTH_ISSUER_URL",
+    "DEMO_USER_EMAIL",
+    "DEMO_USER_PASSWORD",
+    "DEMO_WORKSPACE_REFERENCE",
+    "DEMO_ORGANIZATION_REFERENCE",
+    "DEMO_PROVIDER_TEST_MODE",
+    "DEMO_PROVIDER_SANDBOX_REFERENCE",
+    "TEST_ARTIFACT_DIRECTORY",
+    "TEST_REPORT_DIRECTORY",
+    "TEST_RUN_ID",
+    "SMOKE_HEADLESS",
+    "SMOKE_IGNORE_HTTPS",
+    "SMOKE_TRACE",
+    "AMBIOS_TEST_URL",
+    "AMBIOS_WORKER_URL",
+    "AMBIOS_SMOKE_AUTHORIZATION",
+    "AUTH_DISABLE",
+    "ENVIRONMENT",
+    "CORE_PORT",
+    "CORE_INSPECTOR_PORT"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:studio": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "deploy": {
+      "cache": false
+    },
+    "destroy": {
+      "cache": false
+    }
+  }
+}

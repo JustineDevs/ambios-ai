@@ -1,0 +1,7 @@
+interface:
+  display_name: AmbiOS Governed Delivery
+  short_description: Orchestrate implementation and evidence across the whole system
+  default_prompt: >-
+    Use $ambios-governed-delivery to inspect the complete change surface, route
+    specialist audits, implement the canonical fix, and close every finding with
+    fresh test or deployment evidence.
