@@ -288,7 +288,7 @@ app.get(operationPath("getConnectorHealth"), (c) =>
   c.json({ service: "ambios-connector", runtime: "hono", status: "ok" }),
 );
 
-app.all(operationPath("connectorProviderAction"), async (c) => {
+app.all(operationPath("connectorProviderAction"), async (c, next) => {
   if (!devAuth(c.env) && !c.req.header("Authorization"))
     return c.json({ code: "AUTH_REQUIRED", error: "A user session is required." }, 401);
   if (!c.env.DB || !c.env.NANGO_SECRET_KEY)
@@ -301,6 +301,7 @@ app.all(operationPath("connectorProviderAction"), async (c) => {
     return c.json({ code: "PROVIDER_REQUIRED", error: "A provider is required." }, 400);
   const providerPrefix = operationPath("connectorProviderAction").split(":provider")[0];
   const suffix = c.req.path.split(`${providerPrefix}${provider}/`)[1] ?? "";
+  if (["connection", "verify"].includes(suffix.split("/")[0] ?? "")) return next();
   const actionByPath: Record<string, string> = {
     "snyk/vulnerabilities": "get_vulnerabilities",
     "snyk/scan": "scan_project",
