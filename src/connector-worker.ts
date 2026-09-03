@@ -508,7 +508,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
     const metadata = JSON.parse(row.metadata || "{}");
     const now = new Date().toISOString();
     await c.env.DB.prepare(
-      "UPDATE integrations SET status = 'connected', metadata = ?, last_error = NULL, updated_at = ? WHERE id = ?",
+      "UPDATE integrations SET status = 'connected', connection_health = 'healthy', metadata = ?, last_connection_check_at = ?, last_successful_verification_at = ?, last_error = NULL, updated_at = ? WHERE id = ?",
     )
       .bind(
         JSON.stringify({
@@ -517,6 +517,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
           lastSuccessfulVerificationAt: now,
           verificationId: crypto.randomUUID(),
         }),
+        now,
         now,
         row.id,
       )
