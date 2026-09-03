@@ -45,12 +45,16 @@ function DetailsContent({
   onVerify?: () => void;
   footer?: ReactNode;
 }) {
-  const canConnect = [
-    "not_configured",
-    "authorization_pending",
-    "reauthentication_required",
-  ].includes(item.connectionStatus);
-  const canVerify = item.connectionStatus === "connected" && !item.lastSuccessfulVerificationAt;
+  const hasCallbackConnection = Boolean(
+    item.connectionId && !item.connectionId.startsWith("ambios-"),
+  );
+  const canVerify =
+    (item.connectionStatus === "connected" && !item.lastSuccessfulVerificationAt) ||
+    (item.connectionStatus === "authorization_pending" && hasCallbackConnection);
+  const canConnect =
+    ["not_configured", "authorization_pending", "reauthentication_required"].includes(
+      item.connectionStatus,
+    ) && !canVerify;
   const canDisconnect = item.connectionStatus === "connected";
 
   return (

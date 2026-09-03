@@ -497,14 +497,29 @@ app.post(operationPath("verifyIntegration"), async (c) => {
         "Connection-Id": effectiveConnectionId,
         "Provider-Config-Key": providerConfig(provider),
         Accept: "application/json",
+        ...(request.baseUrlOverride ? { "Base-Url-Override": request.baseUrlOverride } : {}),
         ...(request.body ? { "Content-Type": "application/json" } : {}),
       },
     });
-    if (!response.ok)
-      return c.json(
-        { code: "PROVIDER_VERIFICATION_FAILED", error: "Provider safe-read verification failed." },
-        502,
-      );
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string | { message?: string };
+        message?: string;
+      } | null;
+      const detail =
+        typeof payload?.error === "string"
+          ? payload.error
+          : typeof payload?.error === "object"
+            ? payload.error.message
+            : payload?.message;
+      const errorMessage = `Provider safe-read verification failed${detail ? `: ${detail.slice(0, 180)}` : ` (${response.status})`}`;
+      await c.env.DB.prepare(
+        "UPDATE integrations SET connection_health = 'unhealthy', last_error = ?, updated_at = ? WHERE id = ? AND organization_id = ?",
+      )
+        .bind(errorMessage, new Date().toISOString(), row.id, organization.id)
+        .run();
+      return c.json({ code: "PROVIDER_VERIFICATION_FAILED", error: errorMessage }, 502);
+    }
     const metadata = JSON.parse(row.metadata || "{}");
     const now = new Date().toISOString();
     await c.env.DB.prepare(
@@ -530,11 +545,14 @@ app.post(operationPath("verifyIntegration"), async (c) => {
         outcome: "succeeded",
       },
     });
-  } catch {
-    return c.json(
-      { code: "PROVIDER_VERIFICATION_FAILED", error: "Provider safe-read verification failed." },
-      502,
-    );
+  } catch (cause) {
+    const errorMessage = `Provider safe-read verification failed${cause instanceof Error ? `: ${cause.message.slice(0, 180)}` : ""}`;
+    await c.env.DB.prepare(
+      "UPDATE integrations SET connection_health = 'unhealthy', last_error = ?, updated_at = ? WHERE id = ? AND organization_id = ?",
+    )
+      .bind(errorMessage, new Date().toISOString(), row.id, organization.id)
+      .run();
+    return c.json({ code: "PROVIDER_VERIFICATION_FAILED", error: errorMessage }, 502);
   }
 });
 

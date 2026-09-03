@@ -344,11 +344,33 @@ export default function PluginsPage() {
                     </p>
                   ) : null}
                   <div className="mt-auto flex flex-wrap gap-2">
+                    {(() => {
+                      const hasCallbackConnection = Boolean(
+                        item.connectionId && !item.connectionId.startsWith("ambios-"),
+                      );
+                      const canRetryVerification =
+                        item.connectionStatus === "authorization_pending" && hasCallbackConnection;
+                      if (!canRetryVerification) return null;
+                      return (
+                        <Button
+                          onClick={() => void verify(item, item.connectionId ?? undefined)}
+                          disabled={busy === item.providerId}
+                        >
+                          {busy === item.providerId ? <Loader2 className="animate-spin" /> : null}
+                          Retry verification
+                        </Button>
+                      );
+                    })()}
                     {[
                       "not_configured",
                       "authorization_pending",
                       "reauthentication_required",
-                    ].includes(item.connectionStatus) ? (
+                    ].includes(item.connectionStatus) &&
+                    !(
+                      item.connectionStatus === "authorization_pending" &&
+                      item.connectionId &&
+                      !item.connectionId.startsWith("ambios-")
+                    ) ? (
                       <Button
                         onClick={() => void connect(item)}
                         disabled={busy === item.providerId}

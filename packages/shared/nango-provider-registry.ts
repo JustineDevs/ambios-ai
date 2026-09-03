@@ -39,11 +39,20 @@ export type NangoSafeReadRequest = {
   path: string;
   method: "GET" | "POST";
   body?: string;
+  /** Optional provider API root when the Nango integration proxy base is broader. */
+  baseUrlOverride?: string;
 };
 
 export const NANGO_SAFE_READ_REQUESTS: Record<string, NangoSafeReadRequest> = {
   github: { path: "/user", method: "GET" },
-  cloudflare: { path: "/accounts?page=1&per_page=1", method: "GET" },
+  // The Cloudflare integration is configured against api.cloudflare.com. Nango's
+  // proxy path is relative to that configured base, so the provider API prefix
+  // must be supplied explicitly rather than duplicated in the proxy path.
+  cloudflare: {
+    path: "/accounts?page=1&per_page=1",
+    method: "GET",
+    baseUrlOverride: "https://api.cloudflare.com/client/v4",
+  },
   notion: { path: "/v1/search?page_size=1", method: "GET" },
   openai: { path: "/v1/models", method: "GET" },
   vercel: { path: "/v9/projects?limit=1", method: "GET" },
