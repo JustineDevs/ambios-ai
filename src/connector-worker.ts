@@ -18,13 +18,6 @@ type Env = {
 
 type ConnectorVariables = { userId: string };
 
-type IntegrationRow = {
-  provider: string;
-  status: string;
-  connectionId: string | null;
-  createdAt: string;
-};
-
 const providerConfig: Record<string, string> = {
   github: "github-getting-started",
   vercel: "vercel-mcp",
@@ -291,49 +284,6 @@ app.get(operationPath("getConnectorHealth"), (c) =>
   c.json({ service: "ambios-connector", runtime: "hono", status: "ok" }),
 );
 
-app.get(operationPath("getNangoConnect"), async (c) => {
-  if (!devAuth(c.env) && !c.req.header("Authorization"))
-    return c.json({ code: "AUTH_REQUIRED", error: "A user session is required." }, 401);
-  if (!c.env.DB)
-    return c.json({ code: "RUNTIME_BINDINGS_MISSING", error: "DB is not configured." }, 503);
-  const organization = await c.env.DB.prepare(
-    "SELECT o.id, o.name FROM organizations o JOIN memberships m ON m.organization_id = o.id WHERE m.user_id = ? ORDER BY o.created_at LIMIT 1",
-  )
-    .bind(c.get("userId"))
-    .first<{ id: string; name: string }>();
-  if (!organization)
-    return c.json({
-      data: {
-        ready: false,
-        workspace: null,
-        integration: null,
-        integrations: [],
-        requirements: ["workspace"],
-      },
-    });
-  const rows = await c.env.DB.prepare(
-    "SELECT provider, status, connection_id AS connectionId, created_at AS createdAt FROM integrations WHERE organization_id = ? ORDER BY created_at DESC",
-  )
-    .bind(organization.id)
-    .all<IntegrationRow>();
-  const integrations = rows.results ?? [];
-  const connected = integrations.find((item) => item.status === "connected") ?? null;
-  return c.json({
-    data: {
-      ready: Boolean(
-        integrations.some((item) => item.provider === "openai" && item.status === "connected") &&
-          integrations.some((item) => item.provider === "github" && item.status === "connected"),
-      ),
-      workspace: organization,
-      integration: connected,
-      integrations,
-      requirements: integrations
-        .filter((item) => item.status !== "connected")
-        .map((item) => item.provider),
-    },
-  });
-});
-
 app.all(operationPath("connectorProviderAction"), async (c) => {
   if (!devAuth(c.env) && !c.req.header("Authorization"))
     return c.json({ code: "AUTH_REQUIRED", error: "A user session is required." }, 401);
@@ -579,7 +529,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
   }
 });
 
-app.delete(operationPath("deleteNangoConnect"), async (c) => {
+app.delete(operationPath("disconnectIntegration"), async (c) => {
   const provider = (c.req.param("providerId") ?? "").trim().toLowerCase();
   const body = (await c.req.json().catch(() => null)) as { connectionId?: string } | null;
   const connectionId = body?.connectionId?.trim();

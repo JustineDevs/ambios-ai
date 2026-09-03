@@ -9,7 +9,6 @@ head_sampling_rate = 1
 
 [vars]
 ENVIRONMENT = "production"
-NEXT_PUBLIC_SERVER_URL = "https://ambios.ai"
 MCP_AUTHORIZATION_SERVER_URL = "https://ambios-ai.pcg0255.workers.dev"
 MCP_AUTH_UI_URL = "https://ambios-ai.vercel.app/mcp/authorize"
 MCP_RESOURCE_URL = "https://ambios-ai.pcg0255.workers.dev/mcp"

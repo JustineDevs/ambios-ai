@@ -118,7 +118,7 @@ export default function PluginPage({ params }: { params: Promise<{ provider: str
     setError(null);
     try {
       const response = await requestOperation(
-        "deleteNangoConnect",
+        "disconnectIntegration",
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },

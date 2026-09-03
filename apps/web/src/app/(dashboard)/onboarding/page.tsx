@@ -1,5 +1,6 @@
 "use client";
 
+import { IntegrationListSchema } from "@ambios-ai/shared";
 import { useEffect, useState } from "react";
 import { OnboardingChecklist } from "@/components/ui/onboarding-checklist";
 import { OnboardingScreen } from "@/components/ui/onboarding-screen";
@@ -12,9 +13,26 @@ export default function OnboardingPage() {
     integrations: { provider: string; status: string }[];
   } | null>(null);
   useEffect(() => {
-    void requestOperation("getNangoConnect", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((payload: { data?: typeof readiness }) => setReadiness(payload.data ?? null));
+    void Promise.all([
+      requestOperation("getWorkspace", { cache: "no-store" }),
+      requestOperation("listIntegrations", { cache: "no-store" }),
+    ])
+      .then(async ([workspaceResponse, integrationsResponse]) => {
+        if (!workspaceResponse.ok || !integrationsResponse.ok) return;
+        const workspace = (await workspaceResponse.json()) as {
+          organization?: { id: string; name: string } | null;
+        };
+        const integrations = IntegrationListSchema.parse(await integrationsResponse.json()).data
+          .integrations;
+        setReadiness({
+          workspace: workspace.organization ?? null,
+          integrations: integrations.map((item) => ({
+            provider: item.providerId,
+            status: item.connectionStatus,
+          })),
+        });
+      })
+      .catch(() => setReadiness(null));
   }, []);
   async function createWorkspace(data: { businessName: string; legalName: string }) {
     const response = await requestOperation("getWorkspace", {
@@ -28,11 +46,22 @@ export default function OnboardingPage() {
         : "Workspace setup failed. Check the error and retry.",
     );
     if (response.ok) {
-      const refreshed = await requestOperation("getNangoConnect", { cache: "no-store" });
-      const payload = (await refreshed.json().catch(() => null)) as {
-        data?: typeof readiness;
+      const [workspaceResponse, integrationsResponse] = await Promise.all([
+        requestOperation("getWorkspace", { cache: "no-store" }),
+        requestOperation("listIntegrations", { cache: "no-store" }),
+      ]);
+      const workspace = (await workspaceResponse.json().catch(() => null)) as {
+        organization?: { id: string; name: string } | null;
       } | null;
-      setReadiness(payload?.data ?? null);
+      const integrations = IntegrationListSchema.parse(await integrationsResponse.json()).data
+        .integrations;
+      setReadiness({
+        workspace: workspace?.organization ?? null,
+        integrations: integrations.map((item) => ({
+          provider: item.providerId,
+          status: item.connectionStatus,
+        })),
+      });
     }
   }
   return (

@@ -58,11 +58,11 @@ function DetailsContent({
   onVerify?: () => void;
   footer?: ReactNode;
 }) {
-  const canConnect =
-    item.connectionMode !== "mcp_oauth" &&
-    ["not_configured", "authorization_pending", "reauthentication_required"].includes(
-      item.connectionStatus,
-    );
+  const canConnect = [
+    "not_configured",
+    "authorization_pending",
+    "reauthentication_required",
+  ].includes(item.connectionStatus);
   const canVerify = item.connectionStatus === "connected" && !item.lastSuccessfulVerificationAt;
   const canDisconnect =
     item.connectionMode !== "mcp_oauth" && item.connectionStatus === "connected";
@@ -136,11 +136,13 @@ function DetailsContent({
           >
             {busy ? <Loader2 className="animate-spin" /> : <ExternalLink />}
             <span aria-hidden="true">
-              {item.connectionStatus === "reauthentication_required"
-                ? "Reconnect"
-                : item.connectionStatus === "authorization_pending"
-                  ? "Continue authorization"
-                  : `Connect ${item.providerDisplayName}`}
+              {item.connectionMode === "mcp_oauth"
+                ? "Connect OpenAI"
+                : item.connectionStatus === "reauthentication_required"
+                  ? "Reconnect"
+                  : item.connectionStatus === "authorization_pending"
+                    ? "Continue authorization"
+                    : `Connect ${item.providerDisplayName}`}
             </span>
           </Button>
         ) : null}

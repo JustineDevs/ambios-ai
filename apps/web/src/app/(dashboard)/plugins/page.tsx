@@ -4,6 +4,7 @@ import {
   INTEGRATION_CATALOG,
   type IntegrationConnection,
   IntegrationListSchema,
+  MCP_OPENAI_CLIENT_URL,
 } from "@ambios-ai/shared";
 import Nango from "@nangohq/frontend";
 import { ExternalLink, Loader2, Unplug } from "lucide-react";
@@ -118,7 +119,10 @@ export default function PluginsPage() {
       (filter === "unsupported" && item.connectionStatus === "unsupported"),
   );
   async function connect(item: IntegrationConnection) {
-    if (item.connectionMode === "mcp_oauth") return;
+    if (item.connectionMode === "mcp_oauth") {
+      window.open(MCP_OPENAI_CLIENT_URL, "_blank", "noopener,noreferrer");
+      return;
+    }
     setBusy(item.providerId);
     setError(null);
     setProviderErrors((current) => ({ ...current, [item.providerId]: "" }));
@@ -200,7 +204,7 @@ export default function PluginsPage() {
     setProviderErrors((current) => ({ ...current, [item.providerId]: "" }));
     try {
       const response = await requestOperation(
-        "deleteNangoConnect",
+        "disconnectIntegration",
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
@@ -336,8 +340,7 @@ export default function PluginsPage() {
                     </p>
                   ) : null}
                   <div className="mt-auto flex flex-wrap gap-2">
-                    {item.connectionMode !== "mcp_oauth" &&
-                    [
+                    {[
                       "not_configured",
                       "authorization_pending",
                       "reauthentication_required",
@@ -355,7 +358,9 @@ export default function PluginsPage() {
                           ? "Continue authorization"
                           : item.connectionStatus === "reauthentication_required"
                             ? "Reconnect"
-                            : `Connect ${item.providerDisplayName}`}
+                            : item.connectionMode === "mcp_oauth"
+                              ? "Connect OpenAI"
+                              : `Connect ${item.providerDisplayName}`}
                       </Button>
                     ) : null}
                     {item.connectionMode !== "mcp_oauth" &&

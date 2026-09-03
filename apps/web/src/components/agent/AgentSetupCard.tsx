@@ -1,5 +1,6 @@
 "use client";
 
+import { IntegrationListSchema, MCP_OPENAI_CLIENT_URL } from "@ambios-ai/shared";
 import Nango from "@nangohq/frontend";
 import { Check, ExternalLink, Loader2, Plug } from "lucide-react";
 import Link from "next/link";
@@ -47,20 +48,50 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
   const nangoRef = useRef<Nango | null>(null);
 
   const loadReadiness = useCallback(async () => {
-    const response = await requestOperation("getNangoConnect", { cache: "no-store" });
-    const payload = await readJson<{
-      data?: Readiness;
-      error?: { message?: string };
-      detail?: string;
-    }>(response);
-    if (!response.ok || !payload.data) {
-      if (response.status >= 500) {
+    const [workspaceResponse, integrationsResponse] = await Promise.all([
+      requestOperation("getWorkspace", { cache: "no-store" }),
+      requestOperation("listIntegrations", { cache: "no-store" }),
+    ]);
+    const workspacePayload = await readJson<{ organization?: { id: string; name: string } | null }>(
+      workspaceResponse,
+    );
+    const integrationsPayload = await readJson<unknown>(integrationsResponse);
+    if (!workspaceResponse.ok || !integrationsResponse.ok) {
+      if (workspaceResponse.status >= 500 || integrationsResponse.status >= 500) {
         throw new Error("AmbiOS could not reach the connector service. Retry setup status.");
       }
-      throw new Error(payload.error?.message ?? payload.detail ?? "Setup status unavailable.");
+      throw new Error("Setup status is not available for this workspace.");
     }
-    setReadiness(payload.data);
-    onReadyChange(payload.data.ready);
+    const integrations = IntegrationListSchema.parse(integrationsPayload).data.integrations;
+    const readiness: Readiness = {
+      ready: ["openai", "github"].every((provider) =>
+        integrations.some(
+          (item) =>
+            item.providerId === provider &&
+            (item.connectionStatus === "connected" ||
+              item.connectionStatus === "authorization_pending"),
+        ),
+      ),
+      workspace: workspacePayload.organization ?? null,
+      integration: integrations[0]
+        ? { provider: integrations[0].providerId, status: integrations[0].connectionStatus }
+        : null,
+      integrations: integrations.map((item) => ({
+        provider: item.providerId,
+        status: item.connectionStatus,
+      })),
+      requirements: ["openai", "github"].filter(
+        (provider) =>
+          !integrations.some(
+            (item) =>
+              item.providerId === provider &&
+              (item.connectionStatus === "connected" ||
+                item.connectionStatus === "authorization_pending"),
+          ),
+      ),
+    };
+    setReadiness(readiness);
+    onReadyChange(readiness.ready);
   }, [onReadyChange]);
 
   useEffect(() => {
@@ -235,9 +266,11 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
                     <span className="min-w-0 flex-1 text-sm">{label}</span>
                     {connected && <Check className="size-4 text-emerald-600" />}
                     {provider === "openai" ? (
-                      <span className="w-full text-muted-foreground text-xs sm:ml-auto sm:w-auto">
-                        Use your own ChatGPT account through AmbiOS MCP OAuth.
-                      </span>
+                      <Button asChild className="w-full sm:ml-auto sm:w-auto" variant="outline">
+                        <a href={MCP_OPENAI_CLIENT_URL} target="_blank" rel="noreferrer">
+                          Connect OpenAI <ExternalLink className="size-4" />
+                        </a>
+                      </Button>
                     ) : (
                       <Button
                         className="w-full sm:ml-auto sm:w-auto"

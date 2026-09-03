@@ -9,15 +9,15 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-describe("getNangoProxyAuth", () => {
+describe("getServerProxyAuth", () => {
   it("forwards the validated Supabase access token", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AUTH_DISABLE", "false");
     getUser.mockResolvedValueOnce({ data: { user: { id: "user-1" } } });
     getSession.mockResolvedValueOnce({ data: { session: { access_token: "session-token" } } });
 
-    const { getNangoProxyAuth } = await import("./session-proxy");
-    await expect(getNangoProxyAuth()).resolves.toEqual({
+    const { getServerProxyAuth } = await import("./session-proxy");
+    await expect(getServerProxyAuth()).resolves.toEqual({
       accessToken: "session-token",
       isDevelopmentBypass: false,
     });
@@ -27,8 +27,8 @@ describe("getNangoProxyAuth", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AUTH_DISABLE", "true");
 
-    const { getNangoProxyAuth } = await import("./session-proxy");
-    await expect(getNangoProxyAuth()).resolves.toEqual({
+    const { getServerProxyAuth } = await import("./session-proxy");
+    await expect(getServerProxyAuth()).resolves.toEqual({
       accessToken: null,
       isDevelopmentBypass: true,
     });

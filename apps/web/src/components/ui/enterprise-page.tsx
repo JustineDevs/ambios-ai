@@ -92,9 +92,6 @@ export function EnterprisePage({
   );
 }
 
-/** Shared page header contract for pages that need custom header content. */
-export const PageHeader = EnterprisePage;
-
 export function EnterpriseSummary({
   items,
 }: {
@@ -147,8 +144,6 @@ export function Freshness({
   );
 }
 
-export const FreshnessIndicator = Freshness;
-
 export function EnterpriseState({
   tone = "neutral",
   title,
@@ -192,8 +187,6 @@ export function EnterpriseState({
     </div>
   );
 }
-
-export const StatePanel = EnterpriseState;
 
 export function EmptyState({
   title,
@@ -274,9 +267,6 @@ export function PageToolbar({
     </div>
   );
 }
-
-export const FilterBar = PageToolbar;
-export const HealthSummary = EnterpriseSummary;
 
 export function RiskBadge({ risk }: { risk: string }) {
   const normalized = risk.toLowerCase();

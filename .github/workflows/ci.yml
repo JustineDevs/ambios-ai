@@ -69,11 +69,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ambios-ai/api exec playwright install --with-deps chromium
       - name: Start Worker
-        run: pnpm exec wrangler dev --local --ip 127.0.0.1 > "$RUNNER_TEMP/ambios-worker.log" 2>&1 &
+        run: pnpm dev:core > "$RUNNER_TEMP/ambios-worker.log" 2>&1 &
       - name: Start Connector Worker
-        run: pnpm exec wrangler dev --config wrangler.connector.toml --local --ip 127.0.0.1 --port 8788 > "$RUNNER_TEMP/ambios-connector.log" 2>&1 &
+        run: pnpm exec wrangler dev --config wrangler.connector.toml --local --ip 127.0.0.1 --port 8788 --var ENVIRONMENT:development --var AUTH_DISABLE:true > "$RUNNER_TEMP/ambios-connector.log" 2>&1 &
       - name: Start frontend
-        run: pnpm dev:web -- --host 127.0.0.1 > "$RUNNER_TEMP/ambios-frontend.log" 2>&1 &
+        run: AUTH_DISABLE=true NEXT_PUBLIC_AUTH_DISABLE=true ENVIRONMENT=development pnpm --filter web dev > "$RUNNER_TEMP/ambios-frontend.log" 2>&1 &
       - name: Wait for local services
         run: |
           for url in http://127.0.0.1:8787/api/health http://127.0.0.1:8788/health http://127.0.0.1:3000/agent; do

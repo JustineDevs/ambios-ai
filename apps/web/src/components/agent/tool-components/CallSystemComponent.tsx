@@ -1,6 +1,6 @@
 "use client";
 
-import { getConnectionProtocol, type ToolCall } from "@ambios-ai/shared";
+import { inferProtocolFromUrl, type ToolCall } from "@ambios-ai/shared";
 import { ChevronDown, Database, FolderOpen, Loader2, Terminal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { JsonEditor } from "@/components/editors/JsonEditor";
@@ -78,7 +78,7 @@ export function CallSystemComponent({
   const headers = tool.input?.headers || {};
   const body = tool.input?.body;
 
-  const protocol = getConnectionProtocol(url);
+  const protocol = inferProtocolFromUrl(url);
 
   let parsedBody: any = null;
   try {

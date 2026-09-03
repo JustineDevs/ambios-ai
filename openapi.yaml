@@ -998,40 +998,9 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
-  /api/integrations/{providerId}/connect/status:
-    x-ambios-operations:
-      - operationId: getNangoConnect
-        runtimeOwner: connector-execution
-        supportedStatus: live
-    get:
-      operationId: getNangoConnect
-      summary: "Returns Nango connection status."
-      x-runtime-owner: connector-execution
-      x-supported-status: live
-      x-authentication: required
-      x-organization-scope: true
-      x-workspace-scope: true
-      x-capability: null
-      x-idempotency: none
-      x-audit: optional
-      x-queue: none
-      x-deprecation: current
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              x-response-schema: ConnectionStatus
-              schema: { type: object }
-        '401': { $ref: '#/components/responses/Problem' }
-        '403': { $ref: '#/components/responses/Problem' }
-        '500': { $ref: '#/components/responses/Problem' }
   /api/integrations/{providerId}/connection:
     x-ambios-operations:
       - operationId: disconnectIntegration
-        runtimeOwner: connector-execution
-        supportedStatus: live
-      - operationId: deleteNangoConnect
         runtimeOwner: connector-execution
         supportedStatus: live
     delete:
@@ -1053,29 +1022,6 @@ paths:
           content:
             application/json:
               x-response-schema: IntegrationDetail
-              schema: { type: object }
-        '401': { $ref: '#/components/responses/Problem' }
-        '403': { $ref: '#/components/responses/Problem' }
-        '500': { $ref: '#/components/responses/Problem' }
-    delete:
-      operationId: deleteNangoConnect
-      summary: "Revokes a provider connection."
-      x-runtime-owner: connector-execution
-      x-supported-status: live
-      x-authentication: required
-      x-organization-scope: true
-      x-workspace-scope: true
-      x-capability: null
-      x-idempotency: none
-      x-audit: required
-      x-queue: none
-      x-deprecation: current
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              x-response-schema: Deleted
               schema: { type: object }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }

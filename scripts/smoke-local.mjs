@@ -41,16 +41,6 @@ const checks = [
     authenticated || localAuthDisabled ? '"integrations"' : '"AUTH_PROVIDER_NOT_CONFIGURED"',
   ],
   [
-    "connector feature map",
-    `${workerUrl}/api/nango/features?provider=snyk`,
-    authenticated ? 200 : localAuthDisabled ? 409 : [401, 503],
-    authenticated
-      ? '"snyk.scan_project"'
-      : localAuthDisabled
-        ? '"INTEGRATION_NOT_CONNECTED"'
-        : '"AUTH_PROVIDER_NOT_CONFIGURED"',
-  ],
-  [
     "vendor action boundary",
     `${workerUrl}/api/integrations/snyk/vulnerabilities`,
     authenticated || localAuthDisabled ? 503 : [401, 503],

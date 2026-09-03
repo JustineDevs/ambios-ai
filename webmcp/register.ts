@@ -150,7 +150,7 @@ const toolDefinitions: WebMCPToolDefinition[] = [
     name: "ambios.nango.get_status",
     description: "Read authenticated connector status and workspace readiness.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
-    execute: async () => callApi("getNangoConnect"),
+    execute: async () => callApi("listIntegrations"),
   },
   {
     name: "ambios.nango.create_connect_session",
@@ -415,7 +415,7 @@ const toolDefinitions: WebMCPToolDefinition[] = [
 ];
 
 const toolOperationIds: Record<string, readonly OperationId[]> = {
-  "ambios.nango.get_status": ["getNangoConnect"],
+  "ambios.nango.get_status": ["listIntegrations"],
   "ambios.nango.create_connect_session": ["connectNango"],
   "ambios.identity.get_current_user": ["getIdentity"],
   "ambios.list_incidents": ["listIncidents"],

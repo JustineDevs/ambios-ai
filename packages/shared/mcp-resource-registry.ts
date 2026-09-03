@@ -1,5 +1,8 @@
 import { serviceOriginsFromEnv } from "./service-origins.js";
 
+/** The catalog action opens the supported ChatGPT client; it never represents an MCP token. */
+export const MCP_OPENAI_CLIENT_URL = "https://chatgpt.com";
+
 export const MCP_SCOPE_DEFINITIONS = [
   {
     scope: "ambios.workspace.read",

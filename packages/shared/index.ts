@@ -1,7 +1,8 @@
 export { AmbiOSClient } from "./ambios-client.js";
-export * from "./integration-contract.js";
 export * from "./integration-catalog.js";
+export * from "./integration-contract.js";
 export * from "./json-schema.js";
+export * from "./mcp-resource-registry.js";
 export * from "./operations.js";
 export * from "./rbac-utils.js";
 export * from "./seed-config.js";

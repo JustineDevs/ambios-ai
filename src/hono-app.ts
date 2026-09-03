@@ -543,68 +543,6 @@ export function createHonoApp() {
     }
   });
 
-  app.get(operationPath("getNangoConnect"), async (c) => {
-    if (!readAccess(c))
-      return c.json(
-        { code: "AUTH_REQUIRED", error: "A user session is required for this operation." },
-        401,
-      );
-    if (!c.env.DB)
-      return c.json({ code: "RUNTIME_BINDINGS_MISSING", error: "DB is not configured." }, 503);
-    try {
-      const organization = await organizationFor(c);
-      if (!organization)
-        return c.json({
-          data: {
-            ready: false,
-            workspace: null,
-            integration: null,
-            integrations: [],
-            requirements: ["workspace", "openai", "github"],
-          },
-        });
-      const rows = await c.env.DB.prepare(
-        "SELECT provider, status, connection_id AS connectionId, created_at AS createdAt FROM integrations WHERE organization_id = ? ORDER BY created_at DESC",
-      )
-        .bind(organization.id)
-        .all();
-      const integrations = (rows.results ?? []) as Array<{
-        provider: string;
-        status: string;
-        connectionId?: string | null;
-        createdAt?: string;
-      }>;
-      const requiredProviders = ["openai", "github"];
-      const ready = requiredProviders.every((provider) =>
-        integrations.some((item) => item.provider === provider && item.status === "connected"),
-      );
-      return c.json({
-        data: {
-          ready,
-          workspace: { id: organization.id, name: organization.name },
-          integration: integrations[0] ?? null,
-          integrations,
-          requirements: ready
-            ? []
-            : ["openai", "github"].filter(
-                (provider) =>
-                  !integrations.some(
-                    (item) => item.provider === provider && item.status === "connected",
-                  ),
-              ),
-        },
-      });
-    } catch {
-      return c.json(
-        {
-          code: "INTEGRATIONS_UNAVAILABLE",
-          error: "The integrations table is not available in this runtime.",
-        },
-        503,
-      );
-    }
-  });
-
   app.get(operationPath("getCoreBackendStatus"), (c) =>
     c.json({
       data: {
@@ -1837,7 +1775,7 @@ export function createHonoApp() {
     }
   });
 
-  app.delete(operationPath("deleteNangoConnect"), async (c) => {
+  app.delete(operationPath("disconnectIntegration"), async (c) => {
     if (!c.req.header("Authorization") && !authDisabled(c.env))
       return c.json(
         { code: "AUTH_REQUIRED", error: "A user session is required for this operation." },

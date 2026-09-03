@@ -134,10 +134,3 @@ export async function getNangoIntegrationFunctions(providerConfigKey: string) {
       }) satisfies NangoFunctionDefinition,
   );
 }
-
-export function deleteNangoConnection(connectionId: string, provider: string) {
-  return nangoRequest<{ success: boolean }>(
-    `/connections/${encodeURIComponent(connectionId)}?provider_config_key=${encodeURIComponent(nangoConfigKey(provider))}`,
-    { method: "DELETE" },
-  );
-}

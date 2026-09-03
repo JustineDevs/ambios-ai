@@ -29,9 +29,6 @@ export function inferProtocolFromUrl(url: string): ConnectionProtocol {
   return "http";
 }
 
-// Backward-compatible alias while the rest of OSS catches up to hosted naming.
-export const getConnectionProtocol = inferProtocolFromUrl;
-
 export function isAbortError(error: unknown): boolean {
   if (!error) return false;
   if (typeof error === "string") return error.startsWith("AbortError:");
