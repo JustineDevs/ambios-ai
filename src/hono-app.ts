@@ -1121,15 +1121,20 @@ export function createHonoApp() {
     const actionId = crypto.randomUUID();
     const operationId = crypto.randomUUID();
     const docId = crypto.randomUUID();
+    const operationInput = { incidentId, instruction: instruction.slice(0, 500), environment };
+    const requestHash = await sha256(JSON.stringify(operationInput));
 
     await c.env.DB.batch([
       // Operation lineage
       c.env.DB.prepare(
-        "INSERT INTO operations (id, organization_id, type, state, input_json, created_at, updated_at) VALUES (?, ?, 'hotfix', 'recorded', ?, ?, ?)",
+        "INSERT INTO operations (id, organization_id, actor_id, kind, tool, resource_type, resource_id, request_hash, state, result_json, created_at, updated_at) VALUES (?, ?, ?, 'hotfix', 'ambios.incident.apply_hotfix', 'incident', ?, ?, 'recorded', ?, ?, ?)",
       ).bind(
         operationId,
         organization.id,
-        JSON.stringify({ incidentId, instruction: instruction.slice(0, 500), environment }),
+        tokenRow.user_id,
+        incidentId,
+        requestHash,
+        JSON.stringify({ ...operationInput, executionMode: "not_executed" }),
         now,
         now,
       ),
