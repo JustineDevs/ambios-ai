@@ -3,11 +3,16 @@ export const NANGO_PROVIDER_CONFIG_KEYS = {
   openai: "openai",
   notion: "notion",
   cloudflare: "cloudflare",
-  github: "github-getting-started",
-  vercel: "vercel-mcp",
+  // These keys are the integration IDs currently provisioned in the
+  // production Nango environment. They must match /integrations exactly;
+  // provider names and display labels are not interchangeable with IDs.
+  github: "github",
+  vercel: "vercel",
   netlify: "netlify",
   shopify: "shopify",
-  snyk: "snyk",
+  // Snyk and Netlify currently use the provisioned generic API-key
+  // integration until dedicated Nango integrations are created.
+  snyk: "private-api-generic",
   socket: "socket",
   jira: "jira",
   "google-drive": "google-drive",

@@ -23,9 +23,9 @@ describe("Phase 0 provider integrations", () => {
   });
 
   it("normalizes deployed Nango configuration keys to canonical providers", () => {
-    expect(normalizeNangoProvider("github-getting-started")).toBe("github");
-    expect(normalizeNangoProvider("vercel-mcp")).toBe("vercel");
-    expect(getNangoProviderConfigKey("github")).toBe("github-getting-started");
+    expect(normalizeNangoProvider("github")).toBe("github");
+    expect(normalizeNangoProvider("vercel")).toBe("vercel");
+    expect(getNangoProviderConfigKey("github")).toBe("github");
     expect(normalizeNangoProvider("unknown-provider")).toBeNull();
   });
 
