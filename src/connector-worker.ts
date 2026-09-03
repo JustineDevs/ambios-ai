@@ -1,4 +1,8 @@
 import { Hono } from "hono";
+import {
+  NANGO_PROVIDERS,
+  nangoProviderConfigKey,
+} from "../packages/shared/nango-provider-registry";
 import { operationPath } from "../packages/shared/operations";
 import { enforceSage, SageDeniedError } from "./sage-governance";
 
@@ -18,11 +22,7 @@ type Env = {
 
 type ConnectorVariables = { userId: string };
 
-const providerConfig: Record<string, string> = {
-  openai: "openai",
-  github: "github-getting-started",
-  vercel: "vercel-mcp",
-};
+const providerConfig = nangoProviderConfigKey;
 
 function devAuth(env: Env) {
   return ["development", "test"].includes(env.ENVIRONMENT ?? "") && env.AUTH_DISABLE === "true";
@@ -66,7 +66,7 @@ async function nangoAction(
     headers: {
       Authorization: `Bearer ${env.NANGO_SECRET_KEY}`,
       "Connection-Id": connectionId,
-      "Provider-Config-Key": providerConfig[provider] ?? provider,
+      "Provider-Config-Key": providerConfig(provider),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ action_name: actionName, input }),
@@ -105,7 +105,7 @@ async function nangoSync(
     headers: {
       Authorization: `Bearer ${env.NANGO_SECRET_KEY}`,
       "Connection-Id": connectionId,
-      "Provider-Config-Key": providerConfig[provider] ?? provider,
+      "Provider-Config-Key": providerConfig(provider),
       Accept: "application/json",
     },
   });
@@ -310,7 +310,12 @@ app.all(operationPath("connectorProviderAction"), async (c) => {
   const actionName = actionByPath[key];
   if (!actionName)
     return c.json(
-      { code: "UNSUPPORTED_CONNECTOR_ACTION", error: "Unsupported provider action." },
+      {
+        code: "UNSUPPORTED_CONNECTOR_ACTION",
+        error: `No allowlisted AmbiOS action is registered for ${provider}/${suffix}.`,
+        provider,
+        path: suffix,
+      },
       404,
     );
   const input =
@@ -354,18 +359,7 @@ app.post(operationPath("connectNango"), async (c) => {
   } | null;
   if (!body?.provider)
     return c.json({ code: "VALIDATION_ERROR", error: "provider is required" }, 400);
-  const supportedProviders = new Set([
-    "openai",
-    "notion",
-    "cloudflare",
-    "github",
-    "vercel",
-    "netlify",
-    "shopify",
-    "snyk",
-    "socket",
-  ]);
-  if (!supportedProviders.has(body.provider.trim().toLowerCase()))
+  if (!NANGO_PROVIDERS.has(body.provider.trim().toLowerCase() as never))
     return c.json(
       { code: "UNSUPPORTED_PROVIDER", error: "Provider is not in the secure connection catalog." },
       400,
@@ -378,7 +372,7 @@ app.post(operationPath("connectNango"), async (c) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        allowed_integrations: [providerConfig[body.provider] ?? body.provider],
+        allowed_integrations: [providerConfig(body.provider)],
         tags: {
           end_user_id: c.get("userId"),
           provider: body.provider,
@@ -489,7 +483,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
       headers: {
         Authorization: `Bearer ${c.env.NANGO_SECRET_KEY}`,
         "Connection-Id": row.connectionId,
-        "Provider-Config-Key": providerConfig[provider] ?? provider,
+        "Provider-Config-Key": providerConfig(provider),
         Accept: "application/json",
       },
     });
@@ -555,7 +549,7 @@ app.delete(operationPath("disconnectIntegration"), async (c) => {
     return c.json({ code: "INTEGRATION_NOT_FOUND", error: "Provider connection not found." }, 404);
   try {
     await fetch(
-      `${nangoHost(c.env)}/connections/${encodeURIComponent(connectionId)}?provider_config_key=${encodeURIComponent(providerConfig[provider] ?? provider)}`,
+      `${nangoHost(c.env)}/connections/${encodeURIComponent(connectionId)}?provider_config_key=${encodeURIComponent(providerConfig(provider))}`,
       { method: "DELETE", headers: { Authorization: `Bearer ${c.env.NANGO_SECRET_KEY}` } },
     );
   } catch {

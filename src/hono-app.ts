@@ -5,6 +5,10 @@ import {
   INTEGRATION_PERMISSIONS,
   safeIntegrationConnection,
 } from "../packages/shared";
+import {
+  NANGO_PROVIDERS,
+  nangoProviderConfigKey,
+} from "../packages/shared/nango-provider-registry";
 import { operationPath, operations } from "../packages/shared/operations";
 import { serviceOriginsFromEnv } from "../packages/shared/service-origins";
 import { buildCanvasTopology } from "./canvas-topology";
@@ -75,17 +79,6 @@ async function sha256(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-const NANGO_PROVIDERS = new Set([
-  "openai",
-  "notion",
-  "cloudflare",
-  "github",
-  "vercel",
-  "netlify",
-  "shopify",
-  "snyk",
-  "socket",
-]);
 const INTEGRATION_PROVIDERS = INTEGRATION_CATALOG.map((entry) => entry.provider);
 const PROVIDER_DISPLAY_NAMES = Object.fromEntries(
   INTEGRATION_CATALOG.map((entry) => [entry.provider, entry.label]),
@@ -98,11 +91,7 @@ const PROVIDER_CAPABILITY_LINES = Object.fromEntries(
 );
 
 function nangoProviderKey(provider: string) {
-  const keys: Record<string, string> = {
-    github: "github-getting-started",
-    vercel: "vercel-mcp",
-  };
-  return keys[provider] ?? provider;
+  return nangoProviderConfigKey(provider);
 }
 
 async function nangoRequest(c: { env: HonoBindings }, path: string, init?: RequestInit) {

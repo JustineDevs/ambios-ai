@@ -1,38 +1,21 @@
+import { NANGO_PROVIDER_CONFIG_KEYS, nangoProviderConfigKey } from "@ambios-ai/shared";
 import { z } from "zod";
 
-export const connectorProviderSchema = z.enum([
-  "openai",
-  "notion",
-  "cloudflare",
-  "github",
-  "vercel",
-  "netlify",
-  "shopify",
-  "snyk",
-  "socket",
-]);
+const CONNECTOR_PROVIDERS = Object.keys(NANGO_PROVIDER_CONFIG_KEYS) as [
+  keyof typeof NANGO_PROVIDER_CONFIG_KEYS,
+  ...(keyof typeof NANGO_PROVIDER_CONFIG_KEYS)[],
+];
+export const connectorProviderSchema = z.enum(CONNECTOR_PROVIDERS);
 export type ConnectorProvider = z.infer<typeof connectorProviderSchema>;
 
 export const REQUIRED_ONBOARDING_PROVIDERS = ["github"] as const;
 
-const NANGO_CONFIG_KEYS: Record<ConnectorProvider, string> = {
-  openai: "openai",
-  notion: "notion",
-  cloudflare: "cloudflare",
-  github: "github-getting-started",
-  vercel: "vercel-mcp",
-  netlify: "netlify",
-  shopify: "shopify",
-  snyk: "snyk",
-  socket: "socket",
-};
-
-const CANONICAL_PROVIDERS = new Map(
-  Object.entries(NANGO_CONFIG_KEYS).map(([provider, configKey]) => [configKey, provider]),
+const CANONICAL_PROVIDERS = new Map<string, string>(
+  Object.entries(NANGO_PROVIDER_CONFIG_KEYS).map(([provider, configKey]) => [configKey, provider]),
 );
 
 export function getNangoProviderConfigKey(provider: ConnectorProvider): string {
-  return NANGO_CONFIG_KEYS[provider];
+  return nangoProviderConfigKey(provider);
 }
 
 export function normalizeNangoProvider(value: string): ConnectorProvider | null {
