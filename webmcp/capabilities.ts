@@ -3,6 +3,8 @@ import type { OperationId } from "../packages/shared/operations";
 export type CapabilityStatus = "available" | "roadmap" | "metadata-only" | "locked";
 export type CapabilityRisk = "low" | "medium" | "high";
 export type CapabilityApproval = "none" | "human";
+// Chrome is the host/browser runtime, not a credentialed provider. Keep it out
+// of this registry so the UI never presents a misleading auth flow for it.
 export type Provider =
   | "openai"
   | "cloudflare"
@@ -137,7 +139,9 @@ export const PROVIDER_CAPABILITIES = [
   capability("shopify", "Shopify", "available"),
   capability("snyk", "Snyk", "metadata-only", security.snyk),
   capability("socket", "Socket.dev", "metadata-only", security.socket),
-  capability("render", "Render", "available", [], "runtime"),
+  // Render stays visible to the domain model, but cannot be advertised or
+  // registered as executable until its adapter and verified auth contract exist.
+  capability("render", "Render", "locked", [], "runtime"),
 ] as const satisfies readonly ProviderCapability[];
 export const NANGO_CONNECTOR_CAPABILITIES = PROVIDER_CAPABILITIES.filter(
   (item) => item.credentialMode === "nango" && !["locked", "roadmap"].includes(item.status),

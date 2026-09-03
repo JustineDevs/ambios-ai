@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { MCP_TOOLS } from "../packages/shared/mcp-tools.ts";
+import { PROVIDER_CAPABILITIES } from "../webmcp/capabilities.ts";
 import { ambiosWebMCPTools, registerWebMCPTools } from "../webmcp/register.ts";
 import { VENDOR_FEATURE_MAP } from "../webmcp/vendor-feature-map.ts";
+
+const renderCapability = PROVIDER_CAPABILITIES.find((item) => item.provider === "render");
+assert.equal(renderCapability?.status, "locked");
+assert.equal(
+  PROVIDER_CAPABILITIES.some((item) => item.provider === "google-chrome"),
+  false,
+  "Chrome must remain a native host capability, not an external provider",
+);
 
 const expected = new Set([
   "search_products",
@@ -129,6 +138,7 @@ const providerEnum = (nangoSession.inputSchema.properties as { provider: { enum:
   .provider.enum;
 assert.ok(providerEnum.includes("snyk"));
 assert.ok(providerEnum.includes("socket"));
+assert.equal(providerEnum.includes("render"), false);
 assert.deepEqual(await nangoSession.execute({ provider: "unknown" }), {
   ok: false,
   error: { code: "INVALID_PROVIDER", message: "Unsupported connector." },
