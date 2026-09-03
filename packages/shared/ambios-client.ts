@@ -506,21 +506,48 @@ export class AmbiOSClient {
     if (systemId) params.set("systemId", systemId);
 
     const response = await this.restRequest<{
-      data: any[];
-      total: number;
-      page: number;
-      limit: number;
-      hasMore: boolean;
-    }>("GET", `${operationPath("legacyRuns")}?${params.toString()}`, undefined, undefined, {
+      data: {
+        actions?: Array<{
+          id: string;
+          actionType?: string;
+          status?: string;
+          summary?: string;
+          createdAt?: string;
+        }>;
+      };
+    }>("GET", `${operationPath("listActions")}?${params.toString()}`, undefined, undefined, {
       signal,
     });
 
+    const statusMap: Record<string, RunStatus> = {
+      running: RunStatus.RUNNING,
+      pending: RunStatus.RUNNING,
+      proposed: RunStatus.RUNNING,
+      approved: RunStatus.RUNNING,
+      success: RunStatus.SUCCESS,
+      succeeded: RunStatus.SUCCESS,
+      completed: RunStatus.SUCCESS,
+      executed: RunStatus.SUCCESS,
+      failed: RunStatus.FAILED,
+      error: RunStatus.FAILED,
+      aborted: RunStatus.ABORTED,
+      cancelled: RunStatus.ABORTED,
+    };
+    const actions = response.data?.actions ?? [];
+    const items = actions.map((action) => ({
+      runId: action.id,
+      toolId: action.actionType ?? "ambios.action",
+      status: statusMap[action.status?.toLowerCase() ?? ""] ?? RunStatus.RUNNING,
+      data: action.summary,
+      metadata: { startedAt: action.createdAt ?? new Date(0).toISOString() },
+    })) as Run[];
+
     return {
-      items: response.data.map((run) => this.mapOpenAPIRunToRun(run)),
-      total: response.total,
-      page: response.page,
-      limit: response.limit,
-      hasMore: response.hasMore,
+      items,
+      total: items.length,
+      page,
+      limit,
+      hasMore: items.length === limit,
     };
   }
 
