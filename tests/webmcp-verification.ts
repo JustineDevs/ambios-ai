@@ -33,12 +33,6 @@ const expected = new Set([
   "ambios.integrations.get_status",
   "ambios.integrations.sync",
   "ambios.audit.get_action_log",
-  "snyk.get_vulnerabilities",
-  "snyk.scan_project",
-  "snyk.suggest_fix",
-  "socket.analyze_package",
-  "socket.get_supply_chain_report",
-  "socket.detect_malware",
   "github.dependabot.list_alerts",
   "github.code-scanning.list_alerts",
   "github.secret-scanning.list_alerts",
@@ -83,8 +77,6 @@ const safeNames = new Set([
   "ambios.payments.check_budget",
   "ambios.guardrails.evaluate_guardrails",
   "ambios.integrations.get_status",
-  "snyk.get_vulnerabilities",
-  "socket.analyze_package",
   "github.dependabot.list_alerts",
   "github.code-scanning.list_alerts",
   "github.secret-scanning.list_alerts",
@@ -136,9 +128,10 @@ const nangoSession = ambiosWebMCPTools.find(
 assert.ok(nangoSession);
 const providerEnum = (nangoSession.inputSchema.properties as { provider: { enum: string[] } })
   .provider.enum;
-assert.ok(providerEnum.includes("snyk"));
-assert.ok(providerEnum.includes("socket"));
 assert.equal(providerEnum.includes("render"), false);
+assert.equal(providerEnum.includes("netlify"), false);
+assert.equal(providerEnum.includes("snyk"), false);
+assert.equal(providerEnum.includes("socket"), false);
 assert.deepEqual(await nangoSession.execute({ provider: "unknown" }), {
   ok: false,
   error: { code: "INVALID_PROVIDER", message: "Unsupported connector." },

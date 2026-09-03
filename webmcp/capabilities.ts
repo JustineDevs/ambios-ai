@@ -135,10 +135,10 @@ export const PROVIDER_CAPABILITIES = [
   capability("cloudflare", "Cloudflare", "available"),
   capability("github", "GitHub", "available", security.github),
   capability("vercel", "Vercel", "available"),
-  capability("netlify", "Netlify", "available"),
+  capability("netlify", "Netlify", "locked"),
   capability("shopify", "Shopify", "available"),
-  capability("snyk", "Snyk", "metadata-only", security.snyk),
-  capability("socket", "Socket.dev", "metadata-only", security.socket),
+  capability("snyk", "Snyk", "locked"),
+  capability("socket", "Socket.dev", "locked"),
   // Render stays visible to the domain model, but cannot be advertised or
   // registered as executable until its adapter and verified auth contract exist.
   capability("render", "Render", "locked", [], "runtime"),

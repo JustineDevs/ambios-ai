@@ -116,16 +116,24 @@ async function nangoRequest(c: { env: HonoBindings }, path: string, init?: Reque
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
+    const errorPayload =
+      typeof payload === "object" && payload && "error" in payload ? payload.error : null;
     const detail =
-      typeof payload === "object" && payload
-        ? "error" in payload && typeof payload.error === "string"
-          ? payload.error
-          : "message" in payload && typeof payload.message === "string"
-            ? payload.message
-            : "detail" in payload && typeof payload.detail === "string"
-              ? payload.detail
+      typeof errorPayload === "string"
+        ? errorPayload
+        : typeof errorPayload === "object" && errorPayload && "message" in errorPayload
+          ? typeof errorPayload.message === "string"
+            ? errorPayload.message
+            : null
+          : typeof payload === "object" && payload && "message" in payload
+            ? typeof payload.message === "string"
+              ? payload.message
               : null
-        : null;
+            : typeof payload === "object" && payload && "detail" in payload
+              ? typeof payload.detail === "string"
+                ? payload.detail
+                : null
+              : null;
     throw new Error(
       `Nango request failed (${response.status})${detail ? `: ${detail.slice(0, 180)}` : ""}`,
     );
@@ -144,6 +152,11 @@ async function triggerNangoAction(
   input: Record<string, unknown>,
   connectionId?: string,
 ) {
+  if (!isAvailableProvider(provider)) {
+    const error = new Error(`${PROVIDER_DISPLAY_NAMES[provider] ?? provider} is not available.`);
+    error.name = "PROVIDER_UNAVAILABLE";
+    throw error;
+  }
   const authDisabled =
     ["development", "test"].includes(c.env.ENVIRONMENT ?? "") && c.env.AUTH_DISABLE === "true";
   if (!c.req.header("Authorization") && !authDisabled) {

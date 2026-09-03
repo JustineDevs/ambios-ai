@@ -37,7 +37,7 @@ export const INTEGRATION_CATALOG = [
   {
     provider: "netlify",
     label: "Netlify",
-    phase: "mvp",
+    phase: "roadmap",
     auth: "nango",
     description: "Inspect sites, teams, and deploy history.",
   },
@@ -51,14 +51,14 @@ export const INTEGRATION_CATALOG = [
   {
     provider: "snyk",
     label: "Snyk",
-    phase: "mvp",
+    phase: "roadmap",
     auth: "nango",
     description: "Inspect projects and dependency vulnerability findings.",
   },
   {
     provider: "socket",
     label: "Socket.dev",
-    phase: "mvp",
+    phase: "roadmap",
     auth: "nango",
     description: "Analyze package supply-chain risk and security reports.",
   },

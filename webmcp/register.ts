@@ -734,13 +734,19 @@ toolDefinitions.push({
   },
 });
 
-const tools: WebMCPTool[] = toolDefinitions.map((tool) => {
-  const operationIds = toolOperationIds[tool.name];
-  if (!operationIds || operationIds.some((id) => !operations[id])) {
-    throw new Error(`WebMCP tool ${tool.name} has no canonical operation mapping.`);
-  }
-  return { ...tool, operationIds };
-});
+const tools: WebMCPTool[] = toolDefinitions
+  .map((tool) => {
+    const operationIds = toolOperationIds[tool.name];
+    if (!operationIds || operationIds.some((id) => !operations[id])) {
+      throw new Error(`WebMCP tool ${tool.name} has no canonical operation mapping.`);
+    }
+    return { ...tool, operationIds };
+  })
+  .filter((tool) => {
+    const providerName = tool.name.split(".")[0];
+    const capability = PROVIDER_CAPABILITIES.find((item) => item.provider === providerName);
+    return !capability || !["locked", "roadmap"].includes(capability.status);
+  });
 
 export async function registerWebMCPTools(
   options: { signal?: AbortSignal; toolNames?: readonly string[] } = {},

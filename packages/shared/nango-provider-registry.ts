@@ -10,9 +10,9 @@ export const NANGO_PROVIDER_CONFIG_KEYS = {
   vercel: "vercel",
   netlify: "netlify",
   shopify: "shopify",
-  // Snyk and Netlify currently use the provisioned generic API-key
-  // integration until dedicated Nango integrations are created.
-  snyk: "private-api-generic",
+  // These values are Nango integration unique keys, not provider API names.
+  // Keep them aligned with the production /integrations inventory.
+  snyk: "snyk",
   socket: "socket",
   jira: "jira",
   "google-drive": "google-drive",
