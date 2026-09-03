@@ -68,6 +68,14 @@ interface SystemWithEnvInfo extends System {
   linkedProdSystem?: System;
 }
 
+function systemsErrorMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : "";
+  if (/\b404\b|not found/i.test(detail)) {
+    return "The systems catalog is not available in this deployment. This capability remains unsupported until its backend contract is mounted.";
+  }
+  return "The systems catalog could not be loaded. No system state is inferred locally.";
+}
+
 export default function SystemsPage() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
@@ -271,9 +279,7 @@ export default function SystemsPage() {
             <EnterpriseState
               tone="danger"
               title="Systems unavailable"
-              description={
-                error instanceof Error ? error.message : "The systems catalog could not be loaded."
-              }
+              description={systemsErrorMessage(error)}
               action={
                 <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
                   Retry
@@ -337,9 +343,7 @@ export default function SystemsPage() {
           <EnterpriseState
             tone="warning"
             title="Systems data may be stale"
-            description={
-              error instanceof Error ? error.message : "The latest systems refresh failed."
-            }
+            description={systemsErrorMessage(error)}
             action={
               <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
                 Retry
