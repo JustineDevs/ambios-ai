@@ -1140,11 +1140,12 @@ export function createHonoApp() {
       ),
       // Append-only audit action
       c.env.DB.prepare(
-        "INSERT INTO actions (id, organization_id, operation_id, action_type, actor_id, actor_type, tool_id, input_json, approval_state, status, summary, created_at) VALUES (?, ?, ?, 'hotfix', ?, 'human', 'ambios.incident.apply_hotfix', ?, 'approved', 'recorded', ?, ?)",
+        "INSERT INTO actions (id, organization_id, operation_id, incident_id, action_type, actor_id, actor_type, tool_id, input_json, approval_state, status, summary, created_at) VALUES (?, ?, ?, ?, 'hotfix', ?, 'human', 'ambios.incident.apply_hotfix', ?, 'approved', 'recorded', ?, ?)",
       ).bind(
         actionId,
         organization.id,
         operationId,
+        incidentId,
         tokenRow.user_id,
         JSON.stringify({
           incidentId,
