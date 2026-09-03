@@ -258,7 +258,6 @@ function connectionId(request: Request) {
 }
 
 const app = new Hono<{ Bindings: Env; Variables: ConnectorVariables }>();
-const apiPrefix = operationPath("getConnectorHealth").replace(/\/[^/]+$/, "");
 const connectorHealthPath = operationPath("getConnectorHealth");
 const webhookPath = operationPath("nangoWebhook");
 
@@ -269,7 +268,6 @@ app.use("/*", async (c, next) => {
     c.req.path === webhookPath
   )
     return next();
-  if (!c.req.path.startsWith(apiPrefix)) return next();
   if (devAuth(c.env) && !c.req.header("Authorization")) {
     c.set("userId", "dev-user");
     return next();
