@@ -90,6 +90,13 @@ const PROVIDER_CAPABILITY_LINES = Object.fromEntries(
   ]),
 );
 
+function isAvailableProvider(provider: string) {
+  return (
+    NANGO_PROVIDERS.has(provider) &&
+    INTEGRATION_CATALOG.find((entry) => entry.provider === provider)?.phase !== "roadmap"
+  );
+}
+
 function nangoProviderKey(provider: string) {
   return nangoProviderConfigKey(provider);
 }
@@ -1244,7 +1251,7 @@ export function createHonoApp() {
     const persisted = new Map((rows.results ?? []).map((row) => [String(row.provider), row]));
     const providers = [...INTEGRATION_PROVIDERS].map((provider) => {
       const row = persisted.get(provider);
-      const isRoadmapProvider = !NANGO_PROVIDERS.has(provider);
+      const isRoadmapProvider = !isAvailableProvider(provider);
       const rawStatus = isRoadmapProvider ? "unsupported" : String(row?.status ?? "not_configured");
       const metadata =
         typeof row?.metadata === "string"
@@ -1478,7 +1485,7 @@ export function createHonoApp() {
       connectionId?: string;
     } | null;
     const provider = body?.provider?.trim().toLowerCase();
-    if (!provider || !NANGO_PROVIDERS.has(provider))
+    if (!provider || !isAvailableProvider(provider))
       return c.json({ code: "INVALID_PROVIDER", error: "Unsupported connector." }, 400);
     const organization = await organizationFor(c);
     if (!organization)
@@ -1747,7 +1754,7 @@ export function createHonoApp() {
       .json<{ provider?: string; connectionId?: string }>()
       .catch(() => null)) ?? {}) as { provider?: string; connectionId?: string };
     const provider = (c.req.param("providerId") ?? body.provider)?.trim().toLowerCase();
-    if (!provider || !NANGO_PROVIDERS.has(provider))
+    if (!provider || !isAvailableProvider(provider))
       return c.json(
         {
           code: "INVALID_PROVIDER",
@@ -1829,7 +1836,7 @@ export function createHonoApp() {
       .catch(() => null)) ?? {}) as { provider?: string; connectionId?: string };
     const provider = (c.req.param("providerId") ?? body.provider)?.trim().toLowerCase();
     const connectionId = body.connectionId?.trim();
-    if (!provider || !NANGO_PROVIDERS.has(provider) || !connectionId)
+    if (!provider || !isAvailableProvider(provider) || !connectionId)
       return c.json(
         { code: "VALIDATION_ERROR", error: "A valid provider and connectionId are required." },
         400,

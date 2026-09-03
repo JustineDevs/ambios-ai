@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { INTEGRATION_CATALOG } from "../packages/shared/integration-catalog";
 import {
   NANGO_PROVIDERS,
   nangoProviderConfigKey,
@@ -24,6 +25,13 @@ type Env = {
 type ConnectorVariables = { userId: string };
 
 const providerConfig = nangoProviderConfigKey;
+
+function isAvailableProvider(provider: string) {
+  return (
+    NANGO_PROVIDERS.has(provider) &&
+    INTEGRATION_CATALOG.find((entry) => entry.provider === provider)?.phase !== "roadmap"
+  );
+}
 
 function devAuth(env: Env) {
   return ["development", "test"].includes(env.ENVIRONMENT ?? "") && env.AUTH_DISABLE === "true";
@@ -354,7 +362,7 @@ app.post(operationPath("connectNango"), async (c) => {
   } | null;
   if (!body?.provider)
     return c.json({ code: "VALIDATION_ERROR", error: "provider is required" }, 400);
-  if (!NANGO_PROVIDERS.has(body.provider.trim().toLowerCase() as never))
+  if (!isAvailableProvider(body.provider.trim().toLowerCase()))
     return c.json(
       { code: "UNSUPPORTED_PROVIDER", error: "Provider is not in the secure connection catalog." },
       400,
