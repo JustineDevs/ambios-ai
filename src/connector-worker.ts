@@ -534,6 +534,7 @@ app.post(operationPath("verifyIntegration"), async (c) => {
         }),
         now,
         now,
+        now,
         row.id,
       )
       .run();
