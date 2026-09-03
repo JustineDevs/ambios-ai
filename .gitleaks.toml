@@ -2,3 +2,15 @@ title = "ambios-ai Gitleaks configuration"
 
 [extend]
 useDefault = true
+
+# These are deliberate redaction fixtures in tests and seed documentation. They
+# are not credentials and are retained only to prove secret filtering behavior.
+# The historical commit is scoped explicitly so a new secret in another file
+# still fails the repository scan.
+[allowlist]
+description = "Known non-secret redaction fixtures from the MCP contract change"
+commits = ["d66c73883c6062688fa343b91bd3427eacf38a57"]
+paths = [
+  '''apps/web/src/lib/agent/mention-context\.test\.ts''',
+  '''packages/shared/seed-config\.ts''',
+]

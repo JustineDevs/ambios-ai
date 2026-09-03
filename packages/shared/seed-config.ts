@@ -15,7 +15,7 @@ export const SEED_CONFIG: SeedConfig = {
       templateName: "alphavantage",
       icon: "lucide:chart-line",
       credentials: {
-        apikey: "J8BV3OUAXYOSZIX1",
+        apikey: "fixture-alpha-vantage-key",
       },
       specificInstructions:
         "Alpha Vantage provides real-time and historical stock market data. Use the 'function' parameter to specify the API endpoint (e.g., TIME_SERIES_DAILY, GLOBAL_QUOTE). Always include the 'apikey' parameter in your requests.",
@@ -168,7 +168,7 @@ Authorization: Bearer {your_api_key}
 ## Example Request
 \`\`\`bash
 curl -X POST https://api.ambios.cloud/v1/notify/email \\
-  -H "Authorization: Bearer your_api_key" \\
+  -H "Authorization: Bearer <fixture-token>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "subject": "Hello from ambios!",

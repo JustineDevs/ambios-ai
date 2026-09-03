@@ -24,7 +24,7 @@ const sampleTool: Tool = {
         url: "https://api.crm.example/customers",
         method: "GET",
         systemId: "crm",
-        headers: { Authorization: "Bearer super-secret-step-token" },
+        headers: { Authorization: "Bearer fixture-step-token" },
         body: '{"secret":"payload"}',
       },
     },
@@ -35,7 +35,7 @@ const sampleSystem: System = {
   id: "gmail",
   name: "Gmail",
   url: "https://gmail.googleapis.com/gmail/v1",
-  credentials: { api_key: "sk-live-abcdef123456" },
+  credentials: { api_key: "fixture-api-key" },
 };
 
 const sampleRun: Run = {
@@ -81,7 +81,7 @@ describe("buildMentionContext", () => {
     expect(result).toContain("Sync customers nightly");
     expect(result).toContain("https://api.crm.example/customers");
     // The projection is deliberately narrow: request payload details stay out.
-    expect(result).not.toContain("super-secret-step-token");
+    expect(result).not.toContain("fixture-step-token");
     expect(result).not.toContain('"secret":"payload"');
   });
 
@@ -89,7 +89,7 @@ describe("buildMentionContext", () => {
     const { ctx } = makeCtx();
     const result = (await buildMentionContext([systemRef], ctx))!;
     expect(result).toContain("<<gmail_api_key>>");
-    expect(result).not.toContain("sk-live-abcdef123456");
+    expect(result).not.toContain("fixture-api-key");
   });
 
   it("should spell out the real system id next to the display-name token", async () => {
