@@ -37,10 +37,7 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
   const token = useToken();
   const setupAccess = getAgentSetupAccess({
     token,
-    nodeEnv: process.env.NODE_ENV,
-    authDisabled: process.env.NEXT_PUBLIC_AUTH_DISABLE,
   });
-  const developmentAuthDisabled = setupAccess === "development-bypass";
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [workspaceName, setWorkspaceName] = useState("My AmbiOS workspace");
   const [busy, setBusy] = useState(false);
@@ -105,7 +102,7 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
     setBusy(true);
     setError(null);
     try {
-      const response = await requestOperation("getWorkspace", {
+      const response = await requestOperation("createWorkspace", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({ name: workspaceName }),
@@ -196,15 +193,6 @@ export function AgentSetupCard({ onReadyChange }: { onReadyChange: (ready: boole
         className="mx-auto w-full min-w-0 max-w-2xl rounded-3xl border border-border/70 bg-card/80 p-5 shadow-sm backdrop-blur-xl sm:p-8"
         aria-label="AmbiOS setup"
       >
-        {developmentAuthDisabled && (
-          <div
-            className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs dark:text-amber-300"
-            role="status"
-          >
-            Development auth bypass is active. This screen uses a local test identity; it is not an
-            authenticated user or production workspace.
-          </div>
-        )}
         <div className="flex items-start gap-4">
           <BloubBot
             state="connecting"
