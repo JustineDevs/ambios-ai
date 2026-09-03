@@ -1248,7 +1248,11 @@ export function createHonoApp() {
     )
       .bind(organization.id)
       .all<Record<string, unknown>>();
-    const persisted = new Map((rows.results ?? []).map((row) => [String(row.provider), row]));
+    const persisted = new Map<string, Record<string, unknown>>();
+    for (const row of rows.results ?? []) {
+      const provider = String(row.provider);
+      if (!persisted.has(provider)) persisted.set(provider, row);
+    }
     const providers = [...INTEGRATION_PROVIDERS].map((provider) => {
       const row = persisted.get(provider);
       const isRoadmapProvider = !isAvailableProvider(provider);
