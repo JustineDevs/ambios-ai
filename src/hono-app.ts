@@ -115,7 +115,21 @@ async function nangoRequest(c: { env: HonoBindings }, path: string, init?: Reque
     },
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`Nango request failed (${response.status})`);
+  if (!response.ok) {
+    const detail =
+      typeof payload === "object" && payload
+        ? "error" in payload && typeof payload.error === "string"
+          ? payload.error
+          : "message" in payload && typeof payload.message === "string"
+            ? payload.message
+            : "detail" in payload && typeof payload.detail === "string"
+              ? payload.detail
+              : null
+        : null;
+    throw new Error(
+      `Nango request failed (${response.status})${detail ? `: ${detail.slice(0, 180)}` : ""}`,
+    );
+  }
   return payload as Record<string, unknown>;
 }
 
