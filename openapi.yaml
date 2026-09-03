@@ -975,12 +975,12 @@ paths:
   /api/integrations/{providerId}/connect:
     x-ambios-operations:
       - operationId: connectNango
-        runtimeOwner: connector-execution
+        runtimeOwner: core-api
         supportedStatus: live
     post:
       operationId: connectNango
       summary: "Creates a provider connection through Nango."
-      x-runtime-owner: connector-execution
+      x-runtime-owner: core-api
       x-supported-status: live
       x-authentication: required
       x-organization-scope: true

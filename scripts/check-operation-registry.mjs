@@ -82,6 +82,7 @@ const allowed = new Set([registryFile, join(root, "scripts/check-operation-regis
 // fail closed when they introduce an AmbiOS route literal.
 const allowedExternalContracts = new Map([
   [join(root, "src/connector-worker.ts"), "Nango provider-relative API paths"],
+  [join(root, "packages/shared/nango-provider-registry.ts"), "Nango provider-relative API paths"],
   [join(root, "apps/web/next.config.ts"), "Vercel deployment wildcard routing"],
   [
     join(root, "apps/web/src/lib/external/anthropic-mcp/client/auth.ts"),
