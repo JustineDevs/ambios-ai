@@ -66,7 +66,10 @@ const nextConfig: NextConfig = {
   },
   transpilePackages: ["shiki"],
   async rewrites() {
-    return [...mcpRewrites, ...connectorRewrites, ...coreRewrites];
+    // Core-owned operations must win over the connector's catch-all provider
+    // route (/:provider/*). In particular, /connect is a session-issuance
+    // operation handled by Core, not a provider action executed by Connector.
+    return [...mcpRewrites, ...coreRewrites, ...connectorRewrites];
   },
 };
 
