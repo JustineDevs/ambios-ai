@@ -86,7 +86,13 @@ export async function POST(request: Request) {
         } catch (cause) {
           const message = "Agent request failed. Check the run details and try again if safe.";
           controller.enqueue(
-            encoder.encode(`${JSON.stringify({ type: "error", errorDetails: message })}\n`),
+            encoder.encode(
+              `${JSON.stringify({
+                type: "error",
+                content: message,
+                errorDetails: message,
+              })}\n`,
+            ),
           );
           controller.close();
         } finally {

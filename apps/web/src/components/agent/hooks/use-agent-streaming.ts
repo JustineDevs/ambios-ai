@@ -173,9 +173,17 @@ export function useAgentStreaming({
           lineBuffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
+            // The agent endpoint currently emits NDJSON (one JSON object per line),
+            // while older deployments emitted SSE-style `data: ...` lines. Accept
+            // both wire formats so a valid response cannot leave the UI in Thinking.
+            const trimmedLine = line.trim();
+            const rawLine = trimmedLine.startsWith("data:")
+              ? trimmedLine.slice("data:".length).trim()
+              : trimmedLine;
+
+            if (rawLine.startsWith("{")) {
               try {
-                const data = JSON.parse(line.slice(6));
+                const data = JSON.parse(rawLine);
 
                 if (data.type === "system_message") {
                   const sysMsg: Message = {
