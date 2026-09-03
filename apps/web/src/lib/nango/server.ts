@@ -95,7 +95,9 @@ export async function nangoProxyFetch(options: {
         "Connection-Id": options.connectionId,
       },
       body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
-    });
+      // Node's fetch requires this when streaming a request body to another server.
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
   };
 }
 
