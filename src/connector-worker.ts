@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
   NANGO_PROVIDERS,
   nangoProviderConfigKey,
+  nangoSafeReadRequest,
 } from "../packages/shared/nango-provider-registry";
 import { operationPath } from "../packages/shared/operations";
 import { enforceSage, SageDeniedError } from "./sage-governance";
@@ -90,23 +91,17 @@ async function nangoSync(
     .bind(organizationId, provider, connectionId)
     .first<{ connectionId: string }>();
   if (!integration) throw new Error("Connected Nango integration not found");
-  const paths: Record<string, string> = {
-    notion: "/v1/search?page_size=100",
-    openai: "/v1/models",
-    cloudflare: "/accounts?page=1&per_page=1",
-    github: "/user/repos?per_page=1",
-    vercel: "/v9/projects?limit=1",
-    netlify: "/api/v1/sites?page=1&per_page=1",
-    shopify: "/admin/api/2024-01/shop.json",
-  };
-  const path = paths[provider];
-  if (!path) throw new Error(`Unsupported Nango provider: ${provider}`);
-  const response = await fetch(`${base}/proxy${path}`, {
+  const request = nangoSafeReadRequest(provider);
+  if (!request) throw new Error(`Unsupported Nango provider: ${provider}`);
+  const response = await fetch(`${base}/proxy${request.path}`, {
+    method: request.method,
+    ...(request.body ? { body: request.body } : {}),
     headers: {
       Authorization: `Bearer ${env.NANGO_SECRET_KEY}`,
       "Connection-Id": connectionId,
       "Provider-Config-Key": providerConfig(provider),
       Accept: "application/json",
+      ...(request.body ? { "Content-Type": "application/json" } : {}),
     },
   });
   if (!response.ok) throw new Error(`Provider sync failed (${response.status})`);
@@ -458,19 +453,8 @@ app.post(operationPath("verifyIntegration"), async (c) => {
     target: `${provider}:${row.connectionId}`,
     argumentsJson: JSON.stringify({ verification: "safe-read", provider }),
   });
-  const paths: Record<string, string> = {
-    github: "/user",
-    cloudflare: "/accounts?page=1&per_page=1",
-    notion: "/v1/search?page_size=1",
-    openai: "/v1/models",
-    vercel: "/v9/projects?limit=1",
-    netlify: "/api/v1/sites?page=1&per_page=1",
-    shopify: "/admin/api/2024-01/shop.json",
-    snyk: "/v1/orgs",
-    socket: "/v0/purl",
-  };
-  const path = paths[provider];
-  if (!path)
+  const request = nangoSafeReadRequest(provider);
+  if (!request)
     return c.json(
       {
         code: "UNSUPPORTED_PROVIDER",
@@ -479,12 +463,15 @@ app.post(operationPath("verifyIntegration"), async (c) => {
       501,
     );
   try {
-    const response = await fetch(`${nangoHost(c.env)}/proxy${path}`, {
+    const response = await fetch(`${nangoHost(c.env)}/proxy${request.path}`, {
+      method: request.method,
+      ...(request.body ? { body: request.body } : {}),
       headers: {
         Authorization: `Bearer ${c.env.NANGO_SECRET_KEY}`,
         "Connection-Id": row.connectionId,
         "Provider-Config-Key": providerConfig(provider),
         Accept: "application/json",
+        ...(request.body ? { "Content-Type": "application/json" } : {}),
       },
     });
     if (!response.ok)
