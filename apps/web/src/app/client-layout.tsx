@@ -41,17 +41,15 @@ function WelcomeGate({
   const pathname = usePathname();
   const router = useRouter();
   const isWelcomePage = pathname === "/welcome";
-  const developmentAuthDisabled =
-    process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_AUTH_DISABLE === "true";
   const [welcomeStatus, setWelcomeStatus] = useState<"unknown" | "required" | "complete">(
-    isWelcomePage || developmentAuthDisabled ? "complete" : "unknown",
+    isWelcomePage ? "complete" : "unknown",
   );
 
   useEffect(() => {
     let cancelled = false;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    if (isWelcomePage || developmentAuthDisabled || welcomeStatus !== "unknown") {
+    if (isWelcomePage || welcomeStatus !== "unknown") {
       return;
     }
 
@@ -105,7 +103,7 @@ function WelcomeGate({
         clearTimeout(retryTimeout);
       }
     };
-  }, [apiEndpoint, developmentAuthDisabled, isWelcomePage, token, welcomeStatus]);
+  }, [apiEndpoint, isWelcomePage, token, welcomeStatus]);
 
   useEffect(() => {
     if (!isWelcomePage && welcomeStatus === "required") {

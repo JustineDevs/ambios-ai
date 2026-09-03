@@ -19,18 +19,6 @@ describe("getServerProxyAuth", () => {
     const { getServerProxyAuth } = await import("./session-proxy");
     await expect(getServerProxyAuth()).resolves.toEqual({
       accessToken: "session-token",
-      isDevelopmentBypass: false,
-    });
-  });
-
-  it("does not require Supabase in local auth-disabled development", async () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("AUTH_DISABLE", "true");
-
-    const { getServerProxyAuth } = await import("./session-proxy");
-    await expect(getServerProxyAuth()).resolves.toEqual({
-      accessToken: null,
-      isDevelopmentBypass: true,
     });
   });
 });

@@ -47,30 +47,34 @@ try {
     expectedContent: "html",
     marker: "AmbiOS",
   });
-  for (const [caseId, route, marker] of [
-    ["deployment.frontend.login", "/login", "Sign in"],
-    ["deployment.frontend.agent", "/agent", "Operations copilot"],
-    ["deployment.frontend.plugins", "/plugins", "Plugins"],
-    ["deployment.frontend.incident", "/incidents/example", "Incidents"],
-    ["browser.route.tools", "/tools", "Tools"],
-    ["browser.route.runs", "/runs", "Runs"],
-    ["browser.route.approvals", "/approvals", "Approvals"],
-    ["browser.route.console", "/console", "Console"],
-    ["browser.route.canvas", "/incidents/example/canvas", "Canvas"],
-    ["browser.route.services", "/services", "Services"],
-    ["browser.route.systems", "/systems", "Systems"],
-    ["browser.route.workspace", "/workspace", "Workspace"],
-    ["browser.route.setup", "/setup", "Setup"],
-    ["browser.route.docs", "/docs", "Docs"],
-    ["browser.route.budget", "/budget", "Budget"],
-    ["browser.route.settings", "/settings", "Settings"],
-    ["browser.route.playground", "/playground", "Playground"],
-    ["browser.route.privacy", "/privacy", "Privacy"],
-    ["browser.route.terms", "/terms", "Terms"],
+  for (const [caseId, route, marker, protectedRoute] of [
+    ["deployment.frontend.login", "/login", "Welcome to AmbiOS AI", false],
+    ["deployment.frontend.agent", "/agent", "Operations copilot", true],
+    ["deployment.frontend.plugins", "/plugins", "Plugins", true],
+    ["deployment.frontend.incident", "/incidents/example", "Incidents", true],
+    ["browser.route.tools", "/tools", "Tools", true],
+    ["browser.route.runs", "/runs", "Runs", true],
+    ["browser.route.approvals", "/approvals", "Approvals", true],
+    ["browser.route.console", "/console", "Console", true],
+    ["browser.route.canvas", "/incidents/example/canvas", "Canvas", true],
+    ["browser.route.services", "/services", "Services", true],
+    ["browser.route.systems", "/systems", "Systems", true],
+    ["browser.route.workspace", "/workspace", "Workspace", true],
+    ["browser.route.setup", "/setup", "Setup", true],
+    ["browser.route.docs", "/docs", "Docs", true],
+    ["browser.route.budget", "/budget", "Budget", true],
+    ["browser.route.settings", "/settings", "Settings", true],
+    ["browser.route.playground", "/playground", "Playground", true],
+    ["browser.route.privacy", "/privacy", "Privacy", false],
+    ["browser.route.terms", "/terms", "Terms", false],
   ] as const) {
     const screenshot = join(artifactDir, `${caseId.replace(/[^a-z0-9.-]/gi, "_")}.png`);
     try {
       const response = await page.goto(route, { waitUntil: "domcontentloaded", timeout: 15000 });
+      // Auth/session restoration and streamed app shells can settle after the
+      // initial document response. This is still a real browser assertion; it
+      // avoids recording a transient Loading shell as the deployed page.
+      await page.waitForTimeout(750);
       const body = await page
         .locator("body")
         .innerText()
@@ -82,7 +86,11 @@ try {
         scenario: `direct load ${route}`,
         expected: `HTTP 200 and ${marker}`,
         actual: `HTTP ${response?.status() ?? "none"}`,
-        status: response?.status() === 200 && body.includes(marker) ? "pass" : "fail",
+        status:
+          response?.status() === 200 &&
+          (body.includes(marker) || (protectedRoute && new URL(page.url()).pathname === "/login"))
+            ? "pass"
+            : "fail",
         route,
         statusCode: response?.status(),
         safeConsoleError: consoleErrors.length

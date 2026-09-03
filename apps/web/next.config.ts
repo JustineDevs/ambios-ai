@@ -42,6 +42,20 @@ const connectorRewrites = operationRegistry
     source: nextPath(operation.pathTemplate),
     destination: `${origins.connectorApiOrigin}${nextPath(operation.pathTemplate)}`,
   }));
+const mcpRewrites = operationRegistry
+  .filter((operation) => operation.runtimeOwner === "mcp-oauth" && operation.frontendAvailability)
+  .filter(
+    (operation, index, list) =>
+      list.findIndex(
+        (candidate) =>
+          candidate.pathTemplate === operation.pathTemplate &&
+          candidate.method === operation.method,
+      ) === index,
+  )
+  .map((operation) => ({
+    source: nextPath(operation.pathTemplate),
+    destination: `${origins.coreApiOrigin}${nextPath(operation.pathTemplate)}`,
+  }));
 
 const nextConfig: NextConfig = {
   typedRoutes: false,
@@ -52,7 +66,7 @@ const nextConfig: NextConfig = {
   },
   transpilePackages: ["shiki"],
   async rewrites() {
-    return [...connectorRewrites, ...coreRewrites];
+    return [...mcpRewrites, ...connectorRewrites, ...coreRewrites];
   },
 };
 

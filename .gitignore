@@ -121,9 +121,6 @@ release-evidence/
 .internal
 .omx
 .ma
-# recovery snapshots
-.bts/recovery
-
 # Local browser, package-manager, and OS state
 .eslintcache
 .stylelintcache

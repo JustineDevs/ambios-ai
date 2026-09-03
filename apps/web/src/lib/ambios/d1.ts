@@ -36,7 +36,7 @@ export async function backendGetResult<T>(
   pathParams: Record<string, string> = {},
   query: Record<string, string> = {},
 ): Promise<{ data: T | null; error?: string }> {
-  const base = process.env.AMBIOS_WORKER_URL ?? serviceOriginsFromEnv(process.env).coreApiOrigin;
+  const base = serviceOriginsFromEnv(process.env).coreApiOrigin;
   const cookieHeader = (await cookies()).toString();
   const headers = new Headers({ Accept: "application/json" });
   if (cookieHeader) headers.set("Cookie", cookieHeader);
@@ -46,7 +46,7 @@ export async function backendGetResult<T>(
     if (data.session?.access_token)
       headers.set("Authorization", `Bearer ${data.session.access_token}`);
   } catch {
-    // Development auth bypass intentionally omits a bearer token.
+    // The request remains unauthenticated and the backend must reject it.
   }
   try {
     const path = operationPath(operationId, pathParams);

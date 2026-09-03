@@ -49,7 +49,7 @@ const worker = spawn(
     "--var",
     "ENVIRONMENT:development",
     "--var",
-    "AUTH_DISABLE:true",
+    "AUTH_DISABLE:false",
   ],
   { cwd: root, env, stdio: "inherit" },
 );

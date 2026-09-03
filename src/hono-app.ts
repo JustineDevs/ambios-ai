@@ -6,6 +6,7 @@ import {
   safeIntegrationConnection,
 } from "../packages/shared";
 import { operationPath, operations } from "../packages/shared/operations";
+import { serviceOriginsFromEnv } from "../packages/shared/service-origins";
 import { createMcpRoutes } from "./mcp-routes";
 import { registerOperation } from "./operation-routes";
 import { problem } from "./problem";
@@ -26,6 +27,10 @@ export type HonoBindings = {
   MCP_AUTH_UI_URL?: string;
   MCP_RESOURCE_URL?: string;
   OPENAI_APPS_CHALLENGE_TOKEN?: string;
+  NEXT_PUBLIC_APP_URL?: string;
+  AMBIOS_WORKER_URL?: string;
+  AMBIOS_CONNECTOR_URL?: string;
+  NANGO_WEBHOOK_URL?: string;
 };
 
 type HonoVariables = { userId: string };
@@ -211,11 +216,20 @@ export function createHonoApp() {
     "*",
     cors({
       origin: (origin, c) => {
-        const allowed = ["https://ambios-ai.vercel.app"];
-        if (c.env.ENVIRONMENT !== "production") {
-          allowed.push("http://localhost:3000", "http://127.0.0.1:3000");
-        }
-        return origin && allowed.includes(origin) ? origin : allowed[0];
+        const configured = serviceOriginsFromEnv({
+          NODE_ENV: c.env.ENVIRONMENT === "production" ? "production" : "development",
+          NEXT_PUBLIC_APP_URL: c.env.NEXT_PUBLIC_APP_URL,
+          AMBIOS_WORKER_URL: c.env.AMBIOS_WORKER_URL,
+          AMBIOS_CONNECTOR_URL: c.env.AMBIOS_CONNECTOR_URL,
+          MCP_RESOURCE_URL: c.env.MCP_RESOURCE_URL,
+          MCP_AUTHORIZATION_SERVER_URL: c.env.MCP_AUTHORIZATION_SERVER_URL,
+          NANGO_WEBHOOK_URL: c.env.NANGO_WEBHOOK_URL,
+        });
+        if (origin === configured.frontendOrigin) return origin;
+        if (c.env.ENVIRONMENT !== "production" && origin === "http://127.0.0.1:3000") return origin;
+        // Returning the configured origin for an unknown requester would make
+        // CORS responses misleading. Reject unknown origins instead.
+        return undefined;
       },
       allowHeaders: ["Authorization", "Content-Type", "X-API-Key", "X-Ambios-Connection-Id"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

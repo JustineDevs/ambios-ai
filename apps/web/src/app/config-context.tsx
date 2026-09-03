@@ -12,52 +12,48 @@ export interface ServerSession {
 }
 
 export interface Config {
-  ambiosApiKey: string;
   apiEndpoint: string;
   postHogKey: string;
   postHogHost: string;
   serverSession: ServerSession | null;
 }
 
-interface ConfigContextValue {
-  apiEndpoint: string;
-  postHogKey: string;
-  postHogHost: string;
-  serverSession: ServerSession | null;
-}
+type ConfigContextValue = Config;
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
 
 export function ConfigProvider({ children, config }: { children: ReactNode; config: Config }) {
   useEffect(() => {
     let active = true;
-    let supabase: ReturnType<typeof createClient> | null = null;
 
     try {
-      supabase = createClient();
-      void supabase.auth.getSession().then(({ data: { session } }) => {
-        if (active) tokenRegistry.setToken(session?.access_token ?? (config.ambiosApiKey || null));
-      });
+      const supabase = createClient();
+      void supabase.auth
+        .getSession()
+        .then(({ data: { session } }) => {
+          if (active) tokenRegistry.setToken(session?.access_token ?? null);
+        })
+        .catch(() => {
+          if (active) tokenRegistry.setToken(null);
+        });
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (active) tokenRegistry.setToken(session?.access_token ?? (config.ambiosApiKey || null));
+        if (active) tokenRegistry.setToken(session?.access_token ?? null);
       });
       return () => {
         active = false;
         subscription.unsubscribe();
       };
     } catch {
-      tokenRegistry.setToken(config.ambiosApiKey || null);
+      tokenRegistry.setToken(null);
       return () => {
         active = false;
       };
     }
-  }, [config.ambiosApiKey]);
+  }, []);
 
-  const { ambiosApiKey, ...lightConfig } = config;
-
-  return <ConfigContext.Provider value={lightConfig}>{children}</ConfigContext.Provider>;
+  return <ConfigContext.Provider value={config}>{children}</ConfigContext.Provider>;
 }
 
 export function useConfig() {

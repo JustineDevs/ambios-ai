@@ -21,9 +21,6 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/general-utils";
 
-const developmentAuthBypass =
-  process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_AUTH_DISABLE === "true";
-
 type PageTone = "neutral" | "success" | "warning" | "danger";
 
 const toneClasses: Record<PageTone, string> = {
@@ -39,8 +36,8 @@ export function EnterprisePage({
   description,
   actions,
   breadcrumb = "Operations",
-  environment = developmentAuthBypass ? "Development · auth bypass" : "Production",
-  workspace = developmentAuthBypass ? "No authenticated workspace" : "Current workspace",
+  environment = "Production",
+  workspace = "Current workspace",
   showContext = true,
   updatedAt,
   children,
@@ -490,18 +487,10 @@ export function EnterpriseContextBar() {
           <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
           Control plane active
         </span>
-        <EnvironmentSwitcher
-          value={developmentAuthBypass ? "Development · auth bypass" : "Production"}
-        />
-        <WorkspaceSwitcher
-          value={developmentAuthBypass ? "No authenticated workspace" : "Current workspace"}
-        />
+        <EnvironmentSwitcher value="Production" />
+        <WorkspaceSwitcher value="Current workspace" />
       </div>
-      <span>
-        {developmentAuthBypass
-          ? "Local test identity only · sign in for workspace data"
-          : "State changes require policy and audit evidence"}
-      </span>
+      <span>State changes require policy and audit evidence</span>
     </div>
   );
 }

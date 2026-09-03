@@ -432,6 +432,34 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/connector/health:
+    x-ambios-operations:
+      - operationId: getConnectorHealth
+        runtimeOwner: connector-execution
+        supportedStatus: live
+    get:
+      operationId: getConnectorHealth
+      summary: "Returns Connector health."
+      x-runtime-owner: connector-execution
+      x-supported-status: live
+      x-authentication: none
+      x-organization-scope: false
+      x-workspace-scope: false
+      x-capability: null
+      x-idempotency: none
+      x-audit: optional
+      x-queue: none
+      x-deprecation: current
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              x-response-schema: Health
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/console:
     x-ambios-operations:
       - operationId: getConsole
@@ -582,36 +610,10 @@ paths:
       - operationId: getHealth
         runtimeOwner: core-api
         supportedStatus: live
-      - operationId: getConnectorHealth
-        runtimeOwner: connector-execution
-        supportedStatus: live
     get:
       operationId: getHealth
       summary: "Returns Core API health."
       x-runtime-owner: core-api
-      x-supported-status: live
-      x-authentication: none
-      x-organization-scope: false
-      x-workspace-scope: false
-      x-capability: null
-      x-idempotency: none
-      x-audit: optional
-      x-queue: none
-      x-deprecation: current
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              x-response-schema: Health
-              schema: { type: object }
-        '401': { $ref: '#/components/responses/Problem' }
-        '403': { $ref: '#/components/responses/Problem' }
-        '500': { $ref: '#/components/responses/Problem' }
-    get:
-      operationId: getConnectorHealth
-      summary: "Returns Connector health."
-      x-runtime-owner: connector-execution
       x-supported-status: live
       x-authentication: none
       x-organization-scope: false

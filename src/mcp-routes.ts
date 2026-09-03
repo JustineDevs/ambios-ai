@@ -262,8 +262,6 @@ export function createMcpRoutes() {
       return oauthError(
         "invalid_request",
         "Authorization Code with S256 PKCE and an exact redirect_uri is required.",
-        safeRedirect,
-        q.state,
       );
     const client = await c.env.DB.prepare(
       "SELECT client_id AS clientId, redirect_uris_json AS redirectUrisJson FROM mcp_clients WHERE client_id = ? LIMIT 1",
@@ -278,12 +276,7 @@ export function createMcpRoutes() {
       redirects = [];
     }
     if (!Array.isArray(redirects) || !redirects.includes(safeRedirect))
-      return oauthError(
-        "invalid_request",
-        "redirect_uri is not registered.",
-        safeRedirect,
-        q.state,
-      );
+      return oauthError("invalid_request", "redirect_uri is not registered.");
     const requestedScope = validateMcpScopes(q.scope ?? null);
     const resource = mcpConfiguration(c.env).resource;
     const resourceResult = validateMcpResource(q.resource, c.env);
@@ -295,6 +288,14 @@ export function createMcpRoutes() {
           : "resource must identify the configured AmbiOS MCP server.",
         safeRedirect,
         q.state,
+      );
+    // Revalidate the persisted request at consent time. A request may remain
+    // open across a registry/configuration change and must never mint a code
+    // for a resource or scope that is no longer accepted.
+    if (!validateMcpResource(resource, c.env).ok || !validateMcpScopes(requestedScope.value).ok)
+      return c.json(
+        { error: "invalid_target", error_description: "Authorization target changed." },
+        409,
       );
     const requestId = randomToken(24);
     await c.env.DB.prepare(
@@ -360,11 +361,12 @@ export function createMcpRoutes() {
         400,
       );
     if (!body.approve) {
-      await c.env.DB.prepare(
+      const consumed = await c.env.DB.prepare(
         "UPDATE mcp_authorization_requests SET consumed_at = CURRENT_TIMESTAMP WHERE request_id = ? AND consumed_at IS NULL",
       )
         .bind(body.request_id)
         .run();
+      if ((consumed.meta.changes ?? 0) !== 1) return c.json({ error: "invalid_request" }, 400);
       const denied = new URL(request.redirectUri);
       denied.searchParams.set("error", "access_denied");
       denied.searchParams.set("error_description", "The user denied MCP access.");
@@ -383,10 +385,13 @@ export function createMcpRoutes() {
         403,
       );
     const code = randomToken();
+    const consumed = await c.env.DB.prepare(
+      "UPDATE mcp_authorization_requests SET consumed_at = CURRENT_TIMESTAMP WHERE request_id = ? AND consumed_at IS NULL",
+    )
+      .bind(body.request_id)
+      .run();
+    if ((consumed.meta.changes ?? 0) !== 1) return c.json({ error: "invalid_request" }, 400);
     await c.env.DB.batch([
-      c.env.DB.prepare(
-        "UPDATE mcp_authorization_requests SET consumed_at = CURRENT_TIMESTAMP WHERE request_id = ? AND consumed_at IS NULL",
-      ).bind(body.request_id),
       c.env.DB.prepare(
         "INSERT INTO mcp_authorization_codes (code_hash, request_id, client_id, user_id, organization_id, redirect_uri, resource, scope, code_challenge, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(
@@ -446,10 +451,13 @@ export function createMcpRoutes() {
       if (!valid || !row) return c.json({ error: "invalid_grant" }, 400);
       const access = randomToken();
       const refresh = randomToken();
+      const consumed = await c.env.DB.prepare(
+        "UPDATE mcp_authorization_codes SET consumed_at = CURRENT_TIMESTAMP WHERE code_hash = ? AND consumed_at IS NULL",
+      )
+        .bind(row.codeHash)
+        .run();
+      if ((consumed.meta.changes ?? 0) !== 1) return c.json({ error: "invalid_grant" }, 400);
       await c.env.DB.batch([
-        c.env.DB.prepare(
-          "UPDATE mcp_authorization_codes SET consumed_at = CURRENT_TIMESTAMP WHERE code_hash = ? AND consumed_at IS NULL",
-        ).bind(row.codeHash),
         c.env.DB.prepare(
           "INSERT INTO mcp_access_tokens (token_hash, client_id, user_id, organization_id, resource, scope, issuer, audience, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         ).bind(
@@ -502,11 +510,11 @@ export function createMcpRoutes() {
       if (row.rotatedAt) {
         await c.env.DB.batch([
           c.env.DB.prepare(
-            "UPDATE mcp_refresh_tokens SET rotated_at = COALESCE(rotated_at, CURRENT_TIMESTAMP) WHERE client_id = ? AND user_id = ?",
-          ).bind(row.clientId, row.userId),
+            "UPDATE mcp_refresh_tokens SET rotated_at = COALESCE(rotated_at, CURRENT_TIMESTAMP) WHERE client_id = ? AND user_id = ? AND resource = ? AND organization_id = ?",
+          ).bind(row.clientId, row.userId, row.resource, row.organizationId),
           c.env.DB.prepare(
-            "UPDATE mcp_access_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE client_id = ? AND user_id = ?",
-          ).bind(row.clientId, row.userId),
+            "UPDATE mcp_access_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE client_id = ? AND user_id = ? AND resource = ? AND organization_id = ?",
+          ).bind(row.clientId, row.userId, row.resource, row.organizationId),
         ]);
         await recordOAuthEvent(c.env, row.userId, "MCP OAuth refresh-token reuse detected");
         return c.json({ error: "invalid_grant" }, 400);
@@ -522,10 +530,13 @@ export function createMcpRoutes() {
         return c.json({ error: "invalid_grant" }, 400);
       const access = randomToken();
       const nextRefresh = randomToken();
+      const rotated = await c.env.DB.prepare(
+        "UPDATE mcp_refresh_tokens SET rotated_at = CURRENT_TIMESTAMP WHERE token_hash = ? AND rotated_at IS NULL",
+      )
+        .bind(row.tokenHash)
+        .run();
+      if ((rotated.meta.changes ?? 0) !== 1) return c.json({ error: "invalid_grant" }, 400);
       await c.env.DB.batch([
-        c.env.DB.prepare(
-          "UPDATE mcp_refresh_tokens SET rotated_at = CURRENT_TIMESTAMP WHERE token_hash = ? AND rotated_at IS NULL",
-        ).bind(row.tokenHash),
         c.env.DB.prepare(
           "INSERT INTO mcp_access_tokens (token_hash, client_id, user_id, organization_id, resource, scope, issuer, audience, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         ).bind(
@@ -574,9 +585,9 @@ export function createMcpRoutes() {
       .bind(await digest(bearerToken(c.req.raw) ?? ""))
       .run();
     await c.env.DB.prepare(
-      "UPDATE mcp_refresh_tokens SET rotated_at = CURRENT_TIMESTAMP WHERE client_id = ? AND user_id = ? AND rotated_at IS NULL",
+      "UPDATE mcp_refresh_tokens SET rotated_at = CURRENT_TIMESTAMP WHERE client_id = ? AND user_id = ? AND resource = ? AND organization_id = ? AND rotated_at IS NULL",
     )
-      .bind(token.clientId, token.userId)
+      .bind(token.clientId, token.userId, token.resource, token.organizationId)
       .run();
     await recordOAuthEvent(c.env, token.userId, "MCP OAuth connection revoked");
     return c.body(null, 200);
@@ -585,7 +596,15 @@ export function createMcpRoutes() {
   app.all(operationPath("mcp"), async (c) => {
     const resource = mcpResource(c.env);
     const token = await findMcpToken(c.env.DB, bearerToken(c.req.raw), issuer(c.env), resource);
-    if (!token || token.resource !== resource || !parseScope(token.scope)) {
+    const membership =
+      token && c.env.DB
+        ? await c.env.DB.prepare(
+            "SELECT 1 AS present FROM memberships WHERE user_id = ? AND organization_id = ? LIMIT 1",
+          )
+            .bind(token.userId, token.organizationId)
+            .first<{ present: number }>()
+        : null;
+    if (!token || token.resource !== resource || !parseScope(token.scope) || !membership) {
       c.header(
         "WWW-Authenticate",
         `Bearer resource_metadata="${issuer(c.env)}/.well-known/oauth-protected-resource"`,
@@ -655,6 +674,52 @@ export function createMcpRoutes() {
           error: { code: -32602, message: "Unknown or unavailable tool." },
         });
       }
+      const args = call?.arguments ?? {};
+      if (!args || typeof args !== "object" || Array.isArray(args))
+        return c.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          error: { code: -32602, message: "Tool arguments must be an object." },
+        });
+      const allowedArgumentKeys: Record<string, readonly string[]> = {
+        get_workspace_readiness: [],
+        get_current_workspace_context: [],
+        list_active_incidents: [],
+        get_audit_timeline: [],
+        get_incident_context: ["incidentRef"],
+        create_structured_proposal: ["incidentRef", "objective", "requestedAction"],
+        get_approval_status: ["actionRef"],
+        inspect_action_or_run: ["actionRef"],
+        get_verification_result: ["actionRef"],
+      };
+      const unknownArgument = Object.keys(args).find(
+        (key) => !allowedArgumentKeys[name]?.includes(key),
+      );
+      if (unknownArgument)
+        return c.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          error: { code: -32602, message: `Unsupported tool argument: ${unknownArgument}.` },
+        });
+      const incidentRef = typeof args.incidentRef === "string" ? args.incidentRef.trim() : "";
+      const actionRef = typeof args.actionRef === "string" ? args.actionRef.trim() : "";
+      if (["get_incident_context", "create_structured_proposal"].includes(name) && !incidentRef)
+        return c.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          error: { code: -32602, message: "incidentRef is required." },
+        });
+      if (
+        ["get_approval_status", "inspect_action_or_run", "get_verification_result"].includes(
+          name,
+        ) &&
+        !actionRef
+      )
+        return c.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          error: { code: -32602, message: "actionRef is required." },
+        });
       if (!c.env.DB)
         return c.json({
           jsonrpc: "2.0",
@@ -693,6 +758,145 @@ export function createMcpRoutes() {
           .bind(organization.id)
           .all();
         result = publicToolResult(name, { incidents: incidents.results });
+      } else if (name === "get_incident_context") {
+        const incident = await c.env.DB.prepare(
+          "SELECT id, title, service, severity, status, context FROM incidents WHERE id = ? AND organization_id = ? LIMIT 1",
+        )
+          .bind(incidentRef, organization.id)
+          .first<{
+            id: string;
+            title: string;
+            service: string;
+            severity: string;
+            status: string;
+            context: string;
+          }>();
+        if (!incident)
+          return c.json({
+            jsonrpc: "2.0",
+            id: body.id,
+            error: { code: -32004, message: "Incident is unavailable in this workspace." },
+          });
+        let context: Record<string, unknown> = {};
+        try {
+          const parsed = JSON.parse(incident.context || "{}");
+          if (parsed && typeof parsed === "object") context = parsed as Record<string, unknown>;
+        } catch {
+          context = {};
+        }
+        const strings = (value: unknown) =>
+          Array.isArray(value)
+            ? value.filter((item): item is string => typeof item === "string").slice(0, 20)
+            : [];
+        result = {
+          incidentRef: incident.id,
+          title: incident.title,
+          service: incident.service,
+          severity: incident.severity,
+          status: incident.status,
+          verifiedFacts: strings(context.verifiedFacts),
+          unknowns: strings(context.unknowns),
+          source: "incident-record",
+        };
+      } else if (name === "create_structured_proposal") {
+        const objective = typeof args.objective === "string" ? args.objective.trim() : "";
+        const requestedAction =
+          typeof args.requestedAction === "string" ? args.requestedAction.trim() : "";
+        if (
+          objective.length < 10 ||
+          objective.length > 1000 ||
+          requestedAction.length < 10 ||
+          requestedAction.length > 1000
+        )
+          return c.json({
+            jsonrpc: "2.0",
+            id: body.id,
+            error: {
+              code: -32602,
+              message: "objective and requestedAction must each be 10–1000 characters.",
+            },
+          });
+        const incident = await c.env.DB.prepare(
+          "SELECT id FROM incidents WHERE id = ? AND organization_id = ? LIMIT 1",
+        )
+          .bind(incidentRef, organization.id)
+          .first<{ id: string }>();
+        if (!incident)
+          return c.json({
+            jsonrpc: "2.0",
+            id: body.id,
+            error: { code: -32004, message: "Incident is unavailable in this workspace." },
+          });
+        const proposalRef = crypto.randomUUID();
+        await c.env.DB.prepare(
+          "INSERT INTO actions (id, organization_id, actor_type, actor_id, incident_id, action_type, input_json, output_json, status, approval_state, summary, operation_id) VALUES (?, ?, 'mcp', ?, ?, 'structured_proposal', ?, '{}', 'proposed', 'pending', ?, 'requestHotfixApproval')",
+        )
+          .bind(
+            proposalRef,
+            organization.id,
+            token.userId,
+            incidentRef,
+            JSON.stringify({ objective, requestedAction }),
+            objective.slice(0, 240),
+          )
+          .run();
+        result = {
+          proposalRef,
+          status: "proposed",
+          approvalRequired: true,
+          source: "action-record",
+        };
+      } else if (
+        ["get_approval_status", "inspect_action_or_run", "get_verification_result"].includes(name)
+      ) {
+        const action = await c.env.DB.prepare(
+          "SELECT id, status, approval_state AS approvalState, summary, output_json AS outputJson FROM actions WHERE id = ? AND organization_id = ? LIMIT 1",
+        )
+          .bind(actionRef, organization.id)
+          .first<{
+            id: string;
+            status: string;
+            approvalState: string;
+            summary: string;
+            outputJson: string;
+          }>();
+        if (!action)
+          return c.json({
+            jsonrpc: "2.0",
+            id: body.id,
+            error: { code: -32004, message: "Action is unavailable in this workspace." },
+          });
+        if (name === "get_approval_status")
+          result = {
+            actionRef: action.id,
+            status: action.status,
+            approvalState: action.approvalState,
+            source: "action-record",
+          };
+        else if (name === "inspect_action_or_run")
+          result = {
+            actionRef: action.id,
+            status: action.status,
+            summary: action.summary,
+            source: "action-record",
+          };
+        else {
+          let output: Record<string, unknown> = {};
+          try {
+            output = JSON.parse(action.outputJson || "{}");
+          } catch {
+            output = {};
+          }
+          const available = Boolean(
+            output.verification || output.verified || output.verificationStatus,
+          );
+          result = {
+            actionRef: action.id,
+            status: available ? "available" : "not_available",
+            available,
+            source: "action-record",
+          };
+        }
       } else {
         const actions = await c.env.DB.prepare(
           "SELECT id, action_type AS actionType, status, summary, created_at AS createdAt, completed_at AS completedAt FROM actions WHERE organization_id = ? ORDER BY created_at DESC LIMIT 100",

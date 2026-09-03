@@ -33,7 +33,11 @@ describe("canonical MCP resource and scope registry", () => {
   it("rejects wildcard and unknown scopes and returns canonical ordering", () => {
     const result = validateMcpScopes("ambios.audit.read ambios.workspace.read ambios.audit.read");
     expect(result.ok && result.value).toBe("ambios.workspace.read ambios.audit.read");
-    expect(validateMcpScopes("mcp").code).toBe("invalid_scope");
+    expect(validateMcpScopes("mcp")).toMatchObject({
+      ok: true,
+      value:
+        "ambios.workspace.read ambios.incidents.read ambios.systems.read ambios.audit.read ambios.proposals.create ambios.approvals.read ambios.verification.read",
+    });
     expect(validateMcpScopes("ambios.not-real.read").code).toBe("invalid_scope");
   });
 });

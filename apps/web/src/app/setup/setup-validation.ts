@@ -31,12 +31,12 @@ function postgresIssue(): SetupIssue | null {
 }
 
 function authIssue(): SetupIssue | null {
-  if (env("AUTH_TOKEN") || env("NEXT_PUBLIC_AMBIOS_API_KEY")) return null;
+  if (env("NEXT_PUBLIC_SUPABASE_URL") && env("NEXT_PUBLIC_SUPABASE_ANON_KEY")) return null;
   return {
     id: "auth",
     severity: "blocker",
-    title: "API authentication",
-    detail: "Set AUTH_TOKEN on the API server (required for REST/MCP).",
+    title: "Google authentication",
+    detail: "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
   };
 }
 
@@ -200,18 +200,11 @@ export type Recommendation = {
 export function getRecommendations(): Recommendation[] {
   const recs: Recommendation[] = [];
 
-  if (!env("AUTH_TOKEN") && !env("NEXT_PUBLIC_AMBIOS_API_KEY")) {
+  if (!env("NEXT_PUBLIC_SUPABASE_URL") || !env("NEXT_PUBLIC_SUPABASE_ANON_KEY")) {
     recs.push({
       id: "no-auth",
       kind: "error",
-      message: "No API token configured — REST and MCP endpoints will reject all requests.",
-    });
-  } else if (!env("AUTH_TOKEN") && env("NEXT_PUBLIC_AMBIOS_API_KEY")) {
-    recs.push({
-      id: "legacy-auth",
-      kind: "warning",
-      message:
-        "Using NEXT_PUBLIC_AMBIOS_API_KEY (client-visible). Prefer AUTH_TOKEN for server-side authentication.",
+      message: "Google authentication is not configured for this deployment.",
     });
   }
 
@@ -273,16 +266,6 @@ export function getSetupReport(): { blockers: SetupIssue[]; warnings: SetupIssue
 
   const llm = llmIssue();
   if (llm) blockers.push(llm);
-
-  if (!env("AUTH_TOKEN") && env("NEXT_PUBLIC_AMBIOS_API_KEY")) {
-    warnings.push({
-      id: "auth-legacy-public",
-      severity: "warning",
-      title: "API authentication",
-      detail:
-        "Prefer AUTH_TOKEN on the server; NEXT_PUBLIC_AMBIOS_API_KEY is legacy and client-visible.",
-    });
-  }
 
   warnings.push(...objectStorageIssues());
 

@@ -232,7 +232,7 @@ export const operations = {
     operationId: "getConnectorHealth",
     category: "health",
     method: "GET",
-    pathTemplate: "/api/health",
+    pathTemplate: "/api/connector/health",
     runtimeOwner: "connector-execution",
     publicOrProtected: "public",
     authenticationRequirement: "none",

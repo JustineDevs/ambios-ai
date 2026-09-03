@@ -67,6 +67,12 @@ export const MCP_DEFAULT_SCOPES = [
   "ambios.audit.read",
 ] as const;
 
+/**
+ * OpenAI clients that still send the historical `mcp` scope may be supported,
+ * but it is never a wildcard. It expands to this explicitly bounded set and
+ * is persisted as concrete scopes in the authorization code and token.
+ */
+
 export type McpScope = (typeof MCP_SCOPE_DEFINITIONS)[number]["scope"];
 export type McpRegistryEnvironment = Record<string, unknown>;
 
@@ -141,11 +147,15 @@ export function validateMcpResource(
 }
 
 export function validateMcpScopes(value: string | null | undefined) {
-  const requested = [...new Set((value ?? "").split(/\s+/).filter(Boolean))];
-  if (!requested.length) return { ok: false as const, code: "invalid_scope" as const };
-  if (requested.some((scope) => !MCP_SCOPES.includes(scope)))
+  const requested = new Set((value ?? "").split(/\s+/).filter(Boolean));
+  if (requested.has("mcp")) {
+    requested.delete("mcp");
+    for (const scope of MCP_DEFAULT_SCOPES) requested.add(scope);
+  }
+  if (!requested.size) return { ok: false as const, code: "invalid_scope" as const };
+  if ([...requested].some((scope) => !MCP_SCOPES.includes(scope)))
     return { ok: false as const, code: "invalid_scope" as const };
-  const ordered = MCP_SCOPES.filter((scope) => requested.includes(scope));
+  const ordered = MCP_SCOPES.filter((scope) => requested.has(scope));
   return {
     ok: true as const,
     value: ordered.join(" "),

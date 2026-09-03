@@ -245,8 +245,6 @@ export default function SetupPage(): ReactElement {
   const appUrl = getEnv("AMBIOS_APP_URL") || `http://localhost:${webPort}`;
   const restBase = `${apiEndpoint.replace(/\/$/, "")}/api`;
 
-  const authToken = getEnv("AUTH_TOKEN");
-
   const postgresConfigured =
     !!getEnv("POSTGRES_HOST") &&
     !!getEnv("POSTGRES_PORT") &&
@@ -275,7 +273,11 @@ export default function SetupPage(): ReactElement {
       : fileProvider === "minio"
         ? Boolean(s3Endpoint && minioBucket && minioUser && minioPass)
         : false;
-  const readinessBlocked = !authToken || !postgresConfigured || !llmProvider.model;
+  const readinessBlocked =
+    !getEnv("NEXT_PUBLIC_SUPABASE_URL") ||
+    !getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
+    !postgresConfigured ||
+    !llmProvider.model;
 
   return (
     <LockedPage>
@@ -365,13 +367,6 @@ export default function SetupPage(): ReactElement {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid min-w-0 gap-2 md:grid-cols-2">
-                <SetupConfigRow
-                  className="md:col-span-2"
-                  label="AUTH_TOKEN"
-                  value={maskSecret(authToken)}
-                  copyText={authToken}
-                  statusHint={authToken ? null : "Required"}
-                />
                 <SetupConfigRow label="REST API base URL" value={restBase} copyText={restBase} />
                 <SetupConfigRow label="Web app URL" value={appUrl} copyText={appUrl} />
               </CardContent>
@@ -460,7 +455,6 @@ export default function SetupPage(): ReactElement {
                     <SetupConfigRow
                       label="AWS_ACCESS_KEY_ID"
                       value={maskSecret(awsKey)}
-                      copyText={awsKey}
                       statusHint={awsKey ? null : "Missing"}
                     />
                     <SetupConfigRow

@@ -42,11 +42,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const apiEndpoint = process.env.API_ENDPOINT || serviceOriginsFromEnv(process.env).coreApiOrigin;
-  const apiKey = process.env.NEXT_PUBLIC_AMBIOS_API_KEY || "";
+  const apiEndpoint = serviceOriginsFromEnv(process.env).coreApiOrigin;
 
   const config = {
-    ambiosApiKey: apiKey,
     apiEndpoint,
     postHogKey: process.env.NEXT_PUBLIC_POSTHOG_KEY || "",
     postHogHost: process.env.NEXT_PUBLIC_POSTHOG_HOST || "",

@@ -120,7 +120,9 @@ export default function WelcomePage() {
         <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
           <Card className="fade-in zoom-in-95 w-full max-w-md animate-in overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-br from-muted/50 to-muted/30 shadow-2xl backdrop-blur-xl duration-200 dark:from-muted/50 dark:to-muted/30">
             <CardHeader className="space-y-3 text-center">
-              <BloubBot state="thinking" size={56} label="AmbiOS setup assistant" />
+              <div className="flex justify-center">
+                <BloubBot state="thinking" size={56} label="AmbiOS setup assistant" />
+              </div>
               <CardTitle className="text-2xl">Loading...</CardTitle>
               <CardDescription>Checking your workspace setup.</CardDescription>
             </CardHeader>
@@ -140,7 +142,9 @@ export default function WelcomePage() {
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <Card className="fade-in zoom-in-95 w-full max-w-md animate-in overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-br from-muted/50 to-muted/30 shadow-2xl backdrop-blur-xl duration-200 dark:from-muted/50 dark:to-muted/30">
           <CardHeader className="space-y-4 text-center">
-            <BloubBot state="idle" size={64} label="AmbiOS welcome assistant" />
+            <div className="flex justify-center">
+              <BloubBot state="idle" size={64} label="AmbiOS welcome assistant" />
+            </div>
             <div className="space-y-1.5">
               <CardTitle className="text-2xl">Welcome to AmbiOS AI</CardTitle>
               <CardDescription className="mx-auto max-w-sm text-sm leading-6">

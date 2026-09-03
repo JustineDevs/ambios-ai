@@ -1,22 +1,36 @@
-import { serviceOriginsFromEnv } from "@ambios-ai/shared";
+import { operationPath, serviceOriginsFromEnv } from "@ambios-ai/shared";
 import { AgentClient } from "@/lib/agent/agent-client";
 import type { AgentRequest } from "@/lib/agent/agent-types";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const agentChatPath = operationPath("agentChat");
 
 function errorResponse(message: string, status: 400 | 401 | 503) {
+  let problemType = "agent_request";
+  let title = "Agent request failed";
+  let code = "AGENT_REQUEST_INVALID";
+
+  if (status === 401) {
+    problemType = "auth_required";
+    title = "Authentication required";
+    code = "AUTH_REQUIRED";
+  } else if (status === 503) {
+    code = "AGENT_RUNTIME_UNAVAILABLE";
+  }
+
   return Response.json(
     {
-      code:
-        status === 401
-          ? "AUTH_REQUIRED"
-          : status === 503
-            ? "AGENT_RUNTIME_UNAVAILABLE"
-            : "AGENT_REQUEST_INVALID",
+      type: `https://ambios.ai/problems/${problemType}`,
+      title,
+      status,
+      detail: message,
+      instance: agentChatPath,
+      code,
       error: message,
     },
-    { status },
+    { status, headers: { "Content-Type": "application/problem+json" } },
   );
 }
 
@@ -34,6 +48,16 @@ export async function POST(request: Request) {
   }
 
   const token = authorization.slice("Bearer ".length).trim();
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+    if (error || !user) return errorResponse("A valid user session is required.", 401);
+  } catch {
+    return errorResponse("Authentication service is unavailable.", 503);
+  }
   const apiEndpoint = process.env.API_ENDPOINT ?? serviceOriginsFromEnv(process.env).coreApiOrigin;
   const hasGatewayRuntime = Boolean(process.env.AI_GATEWAY_API_KEY && process.env.AI_GATEWAY_MODEL);
   const configuredProvider = process.env.LLM_PROVIDER?.trim().toLowerCase();
@@ -60,7 +84,7 @@ export async function POST(request: Request) {
           }
           controller.close();
         } catch (cause) {
-          const message = cause instanceof Error ? cause.message : "Agent request failed.";
+          const message = "Agent request failed. Check the run details and try again if safe.";
           controller.enqueue(
             encoder.encode(`${JSON.stringify({ type: "error", errorDetails: message })}\n`),
           );
@@ -84,6 +108,11 @@ export async function POST(request: Request) {
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Agent runtime is unavailable.";
     const isRuntimeFailure = /not configured|missing|api key|credential|model/i.test(message);
-    return errorResponse(message, isRuntimeFailure ? 503 : 400);
+    return errorResponse(
+      isRuntimeFailure
+        ? "Agent runtime is not available. Check workspace model configuration."
+        : "Agent request could not be started.",
+      isRuntimeFailure ? 503 : 400,
+    );
   }
 }

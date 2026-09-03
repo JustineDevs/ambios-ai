@@ -21,7 +21,140 @@ const emptyInput = {
   additionalProperties: false,
 } as const;
 
+const incidentInput = {
+  type: "object",
+  properties: { incidentRef: { type: "string", minLength: 1, maxLength: 128 } },
+  required: ["incidentRef"],
+  additionalProperties: false,
+} as const;
+
+const actionInput = {
+  type: "object",
+  properties: { actionRef: { type: "string", minLength: 1, maxLength: 128 } },
+  required: ["actionRef"],
+  additionalProperties: false,
+} as const;
+
+const proposalInput = {
+  type: "object",
+  properties: {
+    incidentRef: { type: "string", minLength: 1, maxLength: 128 },
+    objective: { type: "string", minLength: 10, maxLength: 1000 },
+    requestedAction: { type: "string", minLength: 10, maxLength: 1000 },
+  },
+  required: ["incidentRef", "objective", "requestedAction"],
+  additionalProperties: false,
+} as const;
+
 export const MCP_TOOLS = [
+  {
+    name: "get_incident_context",
+    operationIds: ["getIncidentContext"],
+    scope: "ambios.incidents.read",
+    description: "Read evidence-backed context for one authorized workspace incident.",
+    inputSchema: incidentInput,
+    outputSchema: {
+      type: "object",
+      required: [
+        "incidentRef",
+        "title",
+        "service",
+        "severity",
+        "status",
+        "verifiedFacts",
+        "unknowns",
+        "source",
+      ],
+      properties: {
+        incidentRef: { type: "string" },
+        title: { type: "string" },
+        service: { type: "string" },
+        severity: { type: "string" },
+        status: { type: "string" },
+        verifiedFacts: { type: "array", items: { type: "string" } },
+        unknowns: { type: "array", items: { type: "string" } },
+        source: { const: "incident-record" },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "create_structured_proposal",
+    operationIds: ["requestHotfixApproval"],
+    scope: "ambios.proposals.create",
+    description: "Persist a structured, non-executing proposal for an authorized incident.",
+    inputSchema: proposalInput,
+    outputSchema: {
+      type: "object",
+      required: ["proposalRef", "status", "approvalRequired", "source"],
+      properties: {
+        proposalRef: { type: "string" },
+        status: { const: "proposed" },
+        approvalRequired: { const: true },
+        source: { const: "action-record" },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "get_approval_status",
+    operationIds: ["listActions"],
+    scope: "ambios.approvals.read",
+    description: "Read the persisted approval state for one authorized action.",
+    inputSchema: actionInput,
+    outputSchema: {
+      type: "object",
+      required: ["actionRef", "status", "approvalState", "source"],
+      properties: {
+        actionRef: { type: "string" },
+        status: { type: "string" },
+        approvalState: { type: "string" },
+        source: { const: "action-record" },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "inspect_action_or_run",
+    operationIds: ["listActions"],
+    scope: "ambios.actions.read",
+    description: "Read one persisted governed action and its current lifecycle state.",
+    inputSchema: actionInput,
+    outputSchema: {
+      type: "object",
+      required: ["actionRef", "status", "summary", "source"],
+      properties: {
+        actionRef: { type: "string" },
+        status: { type: "string" },
+        summary: { type: "string" },
+        source: { const: "action-record" },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "get_verification_result",
+    operationIds: ["listActions"],
+    scope: "ambios.verification.read",
+    description: "Read independent verification evidence persisted for one governed action.",
+    inputSchema: actionInput,
+    outputSchema: {
+      type: "object",
+      required: ["actionRef", "status", "available", "source"],
+      properties: {
+        actionRef: { type: "string" },
+        status: { type: "string" },
+        available: { type: "boolean" },
+        source: { const: "action-record" },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  },
   {
     name: "get_workspace_readiness",
     operationIds: ["getReadiness"],
