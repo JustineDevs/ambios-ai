@@ -6,13 +6,21 @@ export async function initializeUserAIModel(userId: string, modelOverride?: stri
   void userId;
   // backendGet already unwraps the worker's `{ data: ... }` response envelope.
   const result = await backendGet<{
-    integrations: Array<{
+    integrations?: Array<{
       providerId: string;
       connectionId: string | null;
       connectionStatus: string;
     }>;
-  }>("listIntegrations");
-  const integration = result.integrations.find(
+    data?: {
+      integrations?: Array<{
+        providerId: string;
+        connectionId: string | null;
+        connectionStatus: string;
+      }>;
+    };
+  } | null>("listIntegrations");
+  const integrations = result?.integrations ?? result?.data?.integrations ?? [];
+  const integration = integrations.find(
     (item) => item.providerId === "openai" && item.connectionStatus === "connected",
   );
   if (!integration?.connectionId) throw new Error("OpenAI is not connected for this workspace");
