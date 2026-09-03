@@ -55,6 +55,7 @@ export async function updateSession(request: NextRequest) {
   const isPublicMcpOAuthEndpoint =
     request.nextUrl.pathname.startsWith("/.well-known/") ||
     mcpOAuthPaths.has(request.nextUrl.pathname);
+  const isPublicSearchVerification = request.nextUrl.pathname === "/googleb24d000c6a1cb7c4.html";
 
   if (
     !user &&
@@ -69,7 +70,8 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/privacy") &&
     !request.nextUrl.pathname.startsWith("/support") &&
     !isPublicMcpOAuthEndpoint &&
-    !isPublicCanvasShare
+    !isPublicCanvasShare &&
+    !isPublicSearchVerification
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
