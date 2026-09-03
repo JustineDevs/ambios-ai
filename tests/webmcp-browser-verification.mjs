@@ -27,6 +27,8 @@ assert.ok(tools.length >= 2);
 assert.equal(new Set(tools).size, tools.length, "WebMCP tools must be registered once");
 assert.ok(tools.includes("ambios.identity.get_current_user"));
 assert.ok(tools.includes("ambios.workspace.get_current_context"));
+assert.ok(tools.includes("get_workspace_readiness"));
+assert.ok(tools.includes("get_current_workspace_context"));
 assert.deepEqual(insecureRequests, []);
 await browser.close();
 console.log(`Browser WebMCP registration passed for ${tools.length} mounted read-only tools.`);

@@ -61,6 +61,8 @@ const readOnlyTools = new Set([
   "ambios.incident.get_incident_context",
   "ambios.incident.suggest_hotfixes",
   "ambios.workspace.get_current_context",
+  "get_workspace_readiness",
+  "get_current_workspace_context",
   "ambios.console.list_agent_actions",
   "ambios.docs.get_doc",
   "ambios.backend.get_status",
@@ -248,7 +250,82 @@ const toolDefinitions: WebMCPToolDefinition[] = [
     name: "ambios.workspace.get_current_context",
     description: "Read the authenticated AmbiOS workspace, agent, incidents, actions, and docs.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
-    execute: async () => callApi("getWorkspace"),
+    execute: async () => {
+      const result = await callApi("getWorkspace");
+      if (!result.ok) return result;
+      const record = result.data && typeof result.data === "object" ? result.data : {};
+      const organization =
+        "organization" in record && record.organization && typeof record.organization === "object"
+          ? record.organization
+          : {};
+      return {
+        ok: true,
+        data: {
+          name:
+            "name" in organization && typeof organization.name === "string"
+              ? organization.name
+              : "Authorized workspace",
+          source: "workspace-record",
+        },
+      };
+    },
+  },
+  {
+    name: "get_workspace_readiness",
+    description:
+      "Read readiness and connected-provider status for the authorized AmbiOS workspace.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {} },
+    execute: async () => {
+      const result = await callApi("getReadiness");
+      if (!result.ok) return result;
+      const record = result.data && typeof result.data === "object" ? result.data : {};
+      const integrations =
+        "integrations" in record && Array.isArray(record.integrations) ? record.integrations : [];
+      return {
+        ok: true,
+        data: {
+          ready: "ready" in record && record.ready === true,
+          integrations: integrations.map((item) => {
+            const integration = item && typeof item === "object" ? item : {};
+            return {
+              provider:
+                "provider" in integration && typeof integration.provider === "string"
+                  ? integration.provider
+                  : "unknown",
+              status:
+                "status" in integration && typeof integration.status === "string"
+                  ? integration.status
+                  : "unknown",
+            };
+          }),
+          source: "workspace-record",
+        },
+      };
+    },
+  },
+  {
+    name: "get_current_workspace_context",
+    description: "Read the identity and scope of the authorized AmbiOS workspace.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {} },
+    execute: async () => {
+      const result = await callApi("getWorkspace");
+      if (!result.ok) return result;
+      const record = result.data && typeof result.data === "object" ? result.data : {};
+      const organization =
+        "organization" in record && record.organization && typeof record.organization === "object"
+          ? record.organization
+          : {};
+      return {
+        ok: true,
+        data: {
+          name:
+            "name" in organization && typeof organization.name === "string"
+              ? organization.name
+              : "Authorized workspace",
+          source: "workspace-record",
+        },
+      };
+    },
   },
   {
     name: "ambios.console.list_agent_actions",
@@ -423,6 +500,8 @@ const toolOperationIds: Record<string, readonly OperationId[]> = {
   "ambios.incident.get_incident_context": ["getIncidentContext"],
   "ambios.incident.suggest_hotfixes": ["suggestHotfixes"],
   "ambios.workspace.get_current_context": ["getWorkspace"],
+  get_workspace_readiness: ["getReadiness"],
+  get_current_workspace_context: ["getWorkspace"],
   "ambios.console.list_agent_actions": ["getConsole"],
   "ambios.docs.get_doc": ["getDoc"],
   "ambios.backend.get_status": ["getCoreBackendStatus"],
