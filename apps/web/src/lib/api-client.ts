@@ -1,5 +1,5 @@
 import { type OperationId, operationPath } from "@ambios-ai/shared";
-import { tokenRegistry } from "./token-registry";
+import { tokenRegistry } from "./token-registry.ts";
 
 export type ApiProblem = {
   type?: string;
