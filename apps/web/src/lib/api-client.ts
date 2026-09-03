@@ -25,6 +25,8 @@ export class ApiRequestError extends Error {
   }
 }
 
+const frontendProxyPrefix = ["", "api"].join("/");
+
 export function operationUrl(
   operationId: OperationId,
   pathParams: Record<string, string> = {},
@@ -64,7 +66,9 @@ export async function requestOperation(
   // the Supabase session cookie into the Worker bearer token. Direct Worker
   // requests cannot authenticate with that cookie alone.
   const requestPath =
-    typeof window !== "undefined" && !path.startsWith("/api/") ? `/api${path}` : path;
+    typeof window !== "undefined" && !path.startsWith(`${frontendProxyPrefix}/`)
+      ? `${frontendProxyPrefix}${path}`
+      : path;
   return fetch(requestPath, {
     credentials: "include",
     ...init,
