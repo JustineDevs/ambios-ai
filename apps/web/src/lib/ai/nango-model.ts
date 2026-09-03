@@ -4,16 +4,15 @@ import { nangoProxyFetch } from "@/lib/nango/server";
 
 export async function initializeUserAIModel(userId: string, modelOverride?: string) {
   void userId;
+  // backendGet already unwraps the worker's `{ data: ... }` response envelope.
   const result = await backendGet<{
-    data: {
-      integrations: Array<{
-        providerId: string;
-        connectionId: string | null;
-        connectionStatus: string;
-      }>;
-    };
+    integrations: Array<{
+      providerId: string;
+      connectionId: string | null;
+      connectionStatus: string;
+    }>;
   }>("listIntegrations");
-  const integration = result.data.integrations.find(
+  const integration = result.integrations.find(
     (item) => item.providerId === "openai" && item.connectionStatus === "connected",
   );
   if (!integration?.connectionId) throw new Error("OpenAI is not connected for this workspace");

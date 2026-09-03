@@ -325,6 +325,16 @@ export function useAgentRequest({
                 ? {
                     ...msg,
                     content: "I had trouble processing that request. Let me try again.",
+                    parts: [
+                      ...(msg.parts || []).filter(
+                        (part) => part.type !== "content" || part.content?.trim(),
+                      ),
+                      {
+                        type: "content" as const,
+                        content: "I had trouble processing that request. Let me try again.",
+                        id: `content-error-${Date.now()}`,
+                      },
+                    ],
                     isStreaming: false,
                   }
                 : msg,
