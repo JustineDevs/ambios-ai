@@ -1,6 +1,7 @@
 import { operationPath, serviceOriginsFromEnv } from "@ambios-ai/shared";
 import { AgentClient } from "@/lib/agent/agent-client";
 import type { AgentRequest } from "@/lib/agent/agent-types";
+import { initializeUserAIModel } from "@/lib/ai/nango-model";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
   }
 
   const token = authorization.slice("Bearer ".length).trim();
+  let userId: string;
   try {
     const supabase = await createClient();
     const {
@@ -55,23 +57,21 @@ export async function POST(request: Request) {
       error,
     } = await supabase.auth.getUser(token);
     if (error || !user) return errorResponse("A valid user session is required.", 401);
+    userId = user.id;
   } catch {
     return errorResponse("Authentication service is unavailable.", 503);
   }
   const apiEndpoint = process.env.API_ENDPOINT ?? serviceOriginsFromEnv(process.env).coreApiOrigin;
-  const hasGatewayRuntime = Boolean(process.env.AI_GATEWAY_API_KEY && process.env.AI_GATEWAY_MODEL);
-  const configuredProvider = process.env.LLM_PROVIDER?.trim().toLowerCase();
-  if (!hasGatewayRuntime && !configuredProvider) {
-    return errorResponse(
-      "Agent runtime is not configured. Connect a supported model provider before starting an agent run.",
-      503,
-    );
-  }
   try {
+    // Chat credentials are workspace-scoped Nango connections, not deployment
+    // environment variables. This keeps the selector and Connect flow on the
+    // same source of truth and prevents a false "runtime not configured" state.
+    const modelInstance = await initializeUserAIModel(userId, body.model);
     const client = new AgentClient({
       token,
       apiEndpoint,
       model: body.model,
+      modelInstance,
       abortSignal: request.signal,
     });
     const validated = client.validateRequest(body);
